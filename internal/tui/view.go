@@ -51,9 +51,9 @@ type dimensions struct {
 }
 
 func (m *model) inspectorDimensions() dimensions {
-	body := m.height - 6
+	body := m.bodyBounds().height
 	p := m.inspectorProfile()
-	rightFits, bottomFits := m.width >= 120 && body >= 8, m.height >= 24
+	rightFits, bottomFits := m.width >= 120 && body >= 8, body >= 18
 	if p.Inspector == "right" && rightFits || p.Inspector == "bottom" && !bottomFits && rightFits {
 		return dimensions{m.width * p.InspectorPercent / 100, body, false}
 	}
@@ -70,7 +70,7 @@ func (m *model) resize() {
 		m.input.SetCursor(m.input.Position()) // Reflow long paths immediately after a resize.
 	}
 	if m.mode == "picker" {
-		m.input.SetWidth(max(1, min(90, m.width-4)-6))
+		m.input.SetWidth(max(1, m.modalBounds().width-6))
 	}
 	panelWidth, panelHeight := m.width-6, m.height-6
 	if m.smallDeleteModal() {
@@ -78,7 +78,7 @@ func (m *model) resize() {
 		panelWidth, panelHeight = b.width-2, b.height-4
 	}
 	if m.showingLogs() || m.showingEventPanel() {
-		panelWidth, panelHeight = m.width-2, m.height-8
+		panelWidth, panelHeight = m.width-2, m.bodyBounds().height-2
 	}
 	if m.showingEventPanel() {
 		panelHeight-- // Pinned resource tabs above the scrolling viewport.
@@ -293,16 +293,23 @@ func (m *model) pickerView(width, height int) string {
 		lines = append(lines, "No matches")
 	}
 	hints := []shortcut{{"↑/↓ Ctrl+J/K", "move"}, {"Enter", "select"}, {"Esc", "close"}}
+	if m.pickerKind == "inspector-position" {
+		hints = []shortcut{{"↑/↓", "preview"}, {"Enter", "save"}, {"Esc", "cancel"}}
+	}
 	if m.pickerKind == "forwards" {
 		hints = []shortcut{{"↑/↓", "select"}, {"x", "stop"}, {"Esc", "close"}}
 	}
 	if m.pickerKind == "rollouts" {
 		hints = []shortcut{{"↑/↓", "select"}, {"Enter", "details"}, {"Ctrl+R", "reload"}, {"Esc", "close"}}
 	}
-	lines = append(lines, "", m.theme.style("muted").Render(" Type to search · ")+m.shortcuts(" · ", hints...))
+	hintLine := m.shortcuts(" · ", hints...)
+	if m.pickerKind != "inspector-position" {
+		hintLine = m.theme.style("muted").Render(" Type to search · ") + hintLine
+	}
+	lines = append(lines, "", hintLine)
 	title := strings.Title(m.pickerKind)
 	if m.pickerKind == "inspector-position" {
-		title = "Inspector position"
+		title = "Inspector position · preview"
 	}
 	if m.pickerKind == "debug-image-source" {
 		title = "Debug image · first use"
@@ -365,7 +372,10 @@ func (m *model) baseView() tea.View {
 			connectionLine += " · " + m.theme.Name
 		}
 		contextLine := " Context: " + kube.Safe(ctx) + "  ·  Namespace: " + kube.Safe(ns) + "  ·  Explorer · " + m.shortcuts("", shortcut{"e", "edit"})
-		lines := []string{m.theme.style("accent").Bold(true).Render(fit(brand, w)), m.theme.style("foreground").Render(fit(contextLine, w)), m.theme.style("muted").Render(fit(connectionLine, w))}
+		var lines []string
+		if m.headerVisible() {
+			lines = append(lines, m.theme.style("accent").Bold(true).Render(fit(brand, w)), m.theme.style("foreground").Render(fit(contextLine, w)), m.theme.style("muted").Render(fit(connectionLine, w)))
+		}
 		breadcrumb := " " + m.route.resource.ID()
 		if m.route.labels != "" {
 			breadcrumb += " · " + kube.Safe(m.route.labels)
@@ -379,8 +389,10 @@ func (m *model) baseView() tea.View {
 		if m.wide {
 			breadcrumb += " · wide"
 		}
-		lines = append(lines, m.theme.style("foreground").Render(fit(breadcrumb, w)))
-		bodyHeight := h - 6
+		if m.headerVisible() {
+			lines = append(lines, m.theme.style("foreground").Render(fit(breadcrumb, w)))
+		}
+		bodyHeight := m.bodyBounds().height
 		d := m.inspectorDimensions()
 		body := ""
 		if m.showingLogs() || m.showingEventPanel() {

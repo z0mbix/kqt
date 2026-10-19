@@ -35,12 +35,12 @@ func (m *model) footerHelp(d dimensions) string {
 	if m.inspectorVisible() {
 		inspectorAction = "hide/place"
 	}
-	hints := []shortcut{{"j/k", "move"}, {"[ / ]", "sort column"}, {"i/I", inspectorAction}, {"O", "next sort"}, {"R", "reverse"}, {"S", "status"}, {":", "command"}, {"?", "help"}, {"q", "quit"}}
+	hints := []shortcut{{"j/k", "move"}, {"[ / ]", "sort column"}, {"i/I", inspectorAction}, {"z", "header"}, {"O", "next sort"}, {"R", "reverse"}, {"S", "status"}, {":", "command"}, {"?", "help"}, {"q", "quit"}}
 	if d.width > 0 {
-		hints = []shortcut{{"j/k", "move"}, {"Tab", "inspector"}, {"i/I", inspectorAction}, {"O", "next sort"}, {"R", "reverse"}, {"S", "status"}, {":", "command"}, {"?", "help"}}
+		hints = []shortcut{{"j/k", "move"}, {"Tab", "inspector"}, {"i/I", inspectorAction}, {"z", "header"}, {"O", "next sort"}, {"R", "reverse"}, {"S", "status"}, {":", "command"}, {"?", "help"}}
 	}
 	if m.inspectorFocused {
-		hints = []shortcut{{"j/k", "scroll"}, {"Ctrl+U/D", "page"}, {"g/G", "ends"}, {"i/I", inspectorAction}, {"Tab/Esc", "list"}, {"?", "help"}, {"q", "quit"}}
+		hints = []shortcut{{"j/k", "scroll"}, {"Ctrl+B/F", "page"}, {"g/G", "ends"}, {"i/I", inspectorAction}, {"z", "header"}, {"Tab/Esc", "list"}, {"?", "help"}, {"q", "quit"}}
 	}
 	if m.mode == "command" {
 		hints = []shortcut{{"↑/↓", "history"}, {"Ctrl+R", "search"}, {"Tab/Shift+Tab", "complete"}, {"Enter", "run"}, {"Esc", "cancel"}}
@@ -78,18 +78,18 @@ func (m *model) footerHelp(d dimensions) string {
 		}
 	}
 	if m.showingLogs() {
-		hints = []shortcut{{"/", "filter"}, {"O", "log options"}, {"T", "timestamps"}, {"N", "sources"}, {"w", "wrap"}, {"s", "follow"}, {"f", "focus"}, {"o", "save"}, {"Esc", "close"}}
+		hints = []shortcut{{"/", "filter"}, {"O", "log options"}, {"T", "timestamps"}, {"N", "sources"}, {"w", "wrap"}, {"s", "follow"}, {"f", "focus"}, {"z", "header"}, {"o", "save"}, {"Esc", "close"}}
 		if m.mode == "log-search" {
 			hints = []shortcut{{"Enter", "apply"}, {"Esc", "cancel"}, {"Text / re:regex / !exclude", "filter"}, {"level>=warn / request_id=abc", "fields"}}
 		}
 	}
 	if m.showingEventPanel() {
-		hints = []shortcut{{m.resourceTabKeys(), "tabs"}, {"Tab", "cycle"}, {"Space", "pause"}, {"/", "filter"}, {"o", "save"}, {"G", "follow"}, {"Ctrl+R", "reload"}, {"Esc", "close"}}
+		hints = []shortcut{{m.resourceTabKeys(), "tabs"}, {"Tab", "cycle"}, {"Space", "pause"}, {"z", "header"}, {"/", "filter"}, {"o", "save"}, {"G", "follow"}, {"Ctrl+R", "reload"}, {"Esc", "close"}}
 		if m.resourcePanelTab != resourceStatusTab {
-			hints = []shortcut{{m.resourceTabKeys(), "tabs"}, {"Tab/Shift+Tab", "cycle"}, {"j/k", "scroll"}, {"o", "save"}, {"Ctrl+R", "reload"}, {"Esc", "close"}}
+			hints = []shortcut{{m.resourceTabKeys(), "tabs"}, {"Tab/Shift+Tab", "cycle"}, {"j/k", "scroll"}, {"z", "header"}, {"o", "save"}, {"Ctrl+R", "reload"}, {"Esc", "close"}}
 		}
 	} else if m.eventGlobal && m.mode == "" && !m.inspectorFocused {
-		hints = []shortcut{{"Space", "pause"}, {"/", "filter"}, {"o", "save"}, {"G", "follow"}, {"0", "all namespaces"}, {":", "command"}, {"q", "quit"}}
+		hints = []shortcut{{"Space", "pause"}, {"/", "filter"}, {"z", "header"}, {"o", "save"}, {"G", "follow"}, {"0", "all namespaces"}, {":", "command"}, {"q", "quit"}}
 	}
 	if m.mode == "overview" {
 		hints = []shortcut{{"j/k", "scroll"}, {"G/g", "ends"}, {"Enter", "explore problems"}, {"0", "all namespaces"}, {"n", "namespaces"}, {"Ctrl+R", "reload"}, {"Esc", "close"}}

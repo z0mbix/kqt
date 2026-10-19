@@ -111,7 +111,9 @@ Escape outside search to close it. Reopening help starts with the full view.
 
 | Key | Action |
 | --- | --- |
-| `j/k`, arrows; `g/G`; `Ctrl+U/D` | Move, jump, page |
+| `j/k`, arrows; `g/G` | Move, jump to first / last row |
+| `Ctrl+F/B`, `PageDown/PageUp` | Full page down / up in lists and focused panels |
+| `Ctrl+D/U` | Half page down / up in lists and focused panels |
 | `h/l`, arrows | Scroll wide tables or manifests |
 | `:`; `Tab` / `Shift+Tab` | Command prompt; cycle completions forward / back |
 | `Up` / `Down` in `:` | Recall the last 50 successful commands |
@@ -153,6 +155,7 @@ Escape outside search to close it. Reopening help starts with the full view.
 | `:layouts`, `:layout NAME` | Choose a saved layout |
 | `:write NAME` | Save current arrangement, columns, sort, and wide state |
 | `i` | Toggle the inspector off/on, remembering its position |
+| `z`, `:header [on\|off\|toggle]` | Toggle the four-line explorer header; saved between sessions |
 | `I` (Shift+i), `:inspector` | Choose inspector position: right or bottom |
 | `w` | Toggle wide fields |
 | `O` | Sort by the next visible column, ascending; wraps to the first |
@@ -161,14 +164,22 @@ Escape outside search to close it. Reopening help starts with the full view.
 | `:sort`, `:sort COLUMN asc` / `desc` | Choose a column or set its order explicitly |
 | `Ctrl+R`, `Escape`, `?`, `q` | Refresh, back/close, help, quit |
 
-`i` only changes inspector visibility. `I` opens a placement chooser; choosing a
-position also shows the inspector. Both settings are saved, and toggling keeps
+`i` only changes inspector visibility. `I` opens a compact placement chooser.
+Move with arrows, Ctrl+J/K or the mouse wheel, or type to filter: the highlighted
+position previews immediately, including when the inspector was hidden.
+Enter saves the position and shows the inspector; Escape restores the previous
+visibility, position and scroll offsets. Placement previews are not saved.
+Both settings are saved on confirmation, and toggling keeps
 the active layout's columns, sorting and pane size. `:inspector on`, `off`, and
 `toggle` control visibility; `:inspector right` or `bottom` places it directly
 (`none` remains an alias for `off`). On smaller terminals the inspector temporarily
 uses the other position if it fits, returning to your chosen position after a
 resize. Selecting a saved layout applies that layout's visibility and position;
 `:write NAME` captures the current inspector arrangement.
+
+Hiding the header gives its four rows to the resource list and inspector, or to
+the open logs/status view. The status and shortcut bars remain available. Press
+`z` again to restore it, or set `header_visible: false` in your config.
 
 Completion covers commands, resource names and aliases, theme/layout names,
 contexts, known namespaces, and inspector/sort options. Tab only fills the
@@ -444,7 +455,7 @@ content; ordinary Kubernetes RBAC still applies.
 Settings live in `$XDG_CONFIG_HOME/kqt/config.yaml`, or
 `~/.config/kqt/config.yaml`. Missing files use defaults and are created when
 preferences are saved. View and namespace are saved automatically, per context.
-Theme selection, inspector format, and chosen layout are also saved. Launch flags
+Theme selection, header visibility, inspector format, and chosen layout are also saved. Launch flags
 override saved values. A theme preview is not saved until Enter; Escape cancels it.
 The theme name appears on the connection line for ten seconds after selection.
 

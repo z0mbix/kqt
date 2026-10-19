@@ -35,7 +35,7 @@ func (m *model) logTextBounds() paneBounds {
 	if m.logFullScreen {
 		return paneBounds{0, 0, m.panel.Width(), m.panel.Height()}
 	}
-	return paneBounds{1, 5, m.panel.Width(), m.panel.Height()}
+	return paneBounds{1, m.bodyBounds().y + 1, m.panel.Width(), m.panel.Height()}
 }
 
 func (m *model) selectionPane(x, y int) (paneBounds, *viewport.Model, bool) {
@@ -45,7 +45,7 @@ func (m *model) selectionPane(x, y int) (paneBounds, *viewport.Model, bool) {
 	case "logs":
 		bounds, panel = m.logTextBounds(), &m.panel
 	case "events":
-		bounds, panel = paneBounds{1, 6, m.panel.Width(), m.panel.Height()}, &m.panel
+		bounds, panel = paneBounds{1, m.bodyBounds().y + 2, m.panel.Width(), m.panel.Height()}, &m.panel
 	case "help", "help-search":
 		return m.helpPaneAt(x, y)
 	case "details", "access", "overview", "forward-details", "edit-error", "edit-review", "operation-error", "rollout-details":

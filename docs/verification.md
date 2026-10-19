@@ -781,3 +781,20 @@ checks) and the complete `just smoke` suite. Terminal coverage includes the
 restarts, the operator workflow, and all eighteen feature scenarios. All Go
 sources are gofmt-clean and `git diff --check` passes. The development binary
 reports `0.5.0-dev`; tagged builds inject the release tag as their version.
+
+## v0.5.1 navigation and layout qualification
+
+Vim paging checks cover full-page Ctrl+F/B and PageDown/PageUp, half-page
+Ctrl+D/U, table boundaries, bottom/right inspector sizing, independent focused
+panes, and preserved text-input cursor shortcuts. Header checks cover four-row
+space recovery, rendering dimensions, mouse sorting/focus/copy coordinates,
+YAML/TOML persistence, restart, unchanged settings, and logs-only transitions.
+Placement previews cover arrows, filtering, mouse-wheel input, responsive
+fallback, saved confirmation, and cancellation restoring visibility/focus/scroll
+without changing config or applying another resource's previous scroll offset.
+
+The final functional changes passed Go race tests, vet and all fifteen Python
+checks. Native terminal scenarios passed for paging, header visibility/restart,
+inspector placement previews, help and log controls. The classic 80x24, inspector
+180x48 and bottom 80x40 baseline/restart suite also passed. The binary was rebuilt
+locally, and the new paging/header scenarios are included in CI and `just smoke`.

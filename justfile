@@ -18,6 +18,8 @@ check:
 smoke: build
     python3 scripts/tui-smoke.py --binary bin/kqt
     python3 scripts/operator-smoke.py --binary bin/kqt
+    python3 scripts/features-smoke.py --feature paging
+    python3 scripts/features-smoke.py --feature header
     python3 scripts/features-smoke.py --feature relations
     python3 scripts/features-smoke.py --feature manifest
     python3 scripts/features-smoke.py --feature actions

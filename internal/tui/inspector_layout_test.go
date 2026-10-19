@@ -78,6 +78,134 @@ func TestInspectorPlacementChooserAndCancellation(t *testing.T) {
 	}
 }
 
+func TestInspectorPlacementPreviewMovesLiveAndSavesOnlyOnEnter(t *testing.T) {
+	m := demoModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 180, Height: 48})
+	m.selectLayout("classic")
+	m.command("columns name,status,age")
+	m.move(4)
+	columns := slices.Clone(m.columns())
+	before, err := os.ReadFile(m.settings.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key(m, "I")
+	if !m.inspectorVisible() || m.inspectorDimensions().bottom || m.settings.Config.InspectorVisible != nil {
+		t.Fatal("opening the chooser did not preview the hidden inspector on the right")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if m.mode != "picker" || !m.inspectorDimensions().bottom {
+		t.Fatal("moving to bottom did not preview without closing the chooser")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if m.inspectorDimensions().bottom {
+		t.Fatal("moving to right did not restore the right preview")
+	}
+	m.Update(tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl})
+	data, _ := os.ReadFile(m.settings.Path)
+	if string(data) != string(before) || m.settings.Config.InspectorPosition != "right" || m.settings.Config.InspectorVisible != nil {
+		t.Fatal("preview changed persisted placement or visibility")
+	}
+	if m.layout != "classic" || m.selected != 4 || !slices.Equal(m.columns(), columns) {
+		t.Fatal("preview changed layout, columns or resource selection")
+	}
+	key(m, "enter")
+	saved, err := LoadSettings(m.settings.Path)
+	if err != nil || saved.Config.InspectorPosition != "bottom" || saved.Config.InspectorVisible == nil || !*saved.Config.InspectorVisible {
+		t.Fatal("Enter did not save the previewed placement", err)
+	}
+	if m.mode != "" || m.inspectorPreview != nil || !m.inspectorDimensions().bottom {
+		t.Fatal("Enter did not finish the preview")
+	}
+}
+
+func TestInspectorPlacementPreviewCancelRestoresExactPreferencesAndScroll(t *testing.T) {
+	for _, layout := range []string{"classic", "inspector", "bottom", "hidden"} {
+		t.Run(layout, func(t *testing.T) {
+			m := demoModel(t)
+			m.Update(tea.WindowSizeMsg{Width: 180, Height: 48})
+			if layout == "hidden" {
+				m.placeInspector("bottom")
+				m.setInspectorVisibility(false)
+			} else {
+				m.selectLayout(layout)
+			}
+			m.inspectorFocused = m.inspectorVisible()
+			m.inspector.SetYOffset(8)
+			position, visible := m.settings.Config.InspectorPosition, m.settings.Config.InspectorVisible
+			focused, offset, placement := m.inspectorFocused, m.inspector.YOffset(), m.inspectorPlacement()
+			before, _ := os.ReadFile(m.settings.Path)
+			key(m, "I")
+			if placement == "bottom" {
+				m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+			} else {
+				m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+			}
+			key(m, "esc")
+			data, _ := os.ReadFile(m.settings.Path)
+			if m.settings.Config.InspectorPosition != position || m.settings.Config.InspectorVisible != visible || string(data) != string(before) {
+				t.Fatal("cancel changed preferences, including inherited visibility")
+			}
+			if m.inspectorFocused != focused || m.inspector.YOffset() != offset || m.inspectorPlacement() != placement || m.inspectorPreview != nil {
+				t.Fatal("cancel did not restore the prior pane state")
+			}
+		})
+	}
+}
+
+func TestInspectorPlacementPreviewFilteringWheelAndResponsiveResize(t *testing.T) {
+	m := demoModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 180, Height: 48})
+	m.selectLayout("classic")
+	key(m, "I")
+	b := m.modalBounds()
+	if b.width != 50 || b.height != 10 || b.x != 65 || b.y != 19 {
+		t.Fatal("placement chooser is not compact and centred")
+	}
+	m.Update(tea.MouseWheelMsg{X: b.x + 2, Y: b.y + 2, Button: tea.MouseWheelDown})
+	if !m.inspectorDimensions().bottom {
+		t.Fatal("wheel did not preview the bottom position")
+	}
+	m.Update(tea.MouseWheelMsg{X: 0, Y: 0, Button: tea.MouseWheelUp})
+	if m.pickerIndex != 1 {
+		t.Fatal("wheel outside the chooser changed its selection")
+	}
+	m.Update(tea.MouseWheelMsg{X: b.x + 2, Y: b.y + 2, Button: tea.MouseWheelUp})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	if m.inspectorPlacement() != "right" || !m.inspectorDimensions().bottom {
+		t.Fatal("preview lost the preferred position during responsive fallback")
+	}
+	m.Update(tea.WindowSizeMsg{Width: 180, Height: 48})
+	if m.inspectorDimensions().bottom {
+		t.Fatal("resizing back did not restore the right preview")
+	}
+	typeHelpQuery(m, "bottom")
+	if !m.inspectorDimensions().bottom || len(m.matches) != 1 {
+		t.Fatal("filtering did not preview the highlighted position")
+	}
+	typeHelpQuery(m, "-no-match")
+	key(m, "enter")
+	if m.mode != "picker" || len(m.matches) != 0 || !m.inspectorDimensions().bottom {
+		t.Fatal("empty results committed or discarded the last valid preview")
+	}
+	key(m, "esc")
+	if m.inspectorVisible() {
+		t.Fatal("cancel did not restore the originally hidden inspector")
+	}
+}
+
+func TestInspectorPlacementPreviewDoesNotRestoreScrollForAnotherResource(t *testing.T) {
+	m := demoModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 180, Height: 24})
+	m.inspector.SetYOffset(8)
+	key(m, "I")
+	m.move(1) // The selected object can change during a resource watch update.
+	key(m, "esc")
+	if m.inspector.YOffset() != 0 {
+		t.Fatal("cancel applied the previous resource's scroll position to a new one")
+	}
+}
+
 func TestInspectorPreferencesPersistYAMLAndTOML(t *testing.T) {
 	for _, ext := range []string{"yaml", "toml"} {
 		t.Run(ext, func(t *testing.T) {

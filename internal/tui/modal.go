@@ -12,6 +12,9 @@ func (m *model) modalBounds() paneBounds {
 	w, h := max(2, m.width-4), max(2, m.height-4)
 	if m.mode == "picker" {
 		w, h = min(90, w), min(24, h)
+		if m.pickerKind == "inspector-position" {
+			w, h = min(50, w), min(10, h)
+		}
 	}
 	if m.smallDeleteModal() {
 		w, h = min(66, w), min(12, h)

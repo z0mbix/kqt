@@ -9,7 +9,7 @@ func (b paneBounds) interior(x, y int) bool {
 }
 
 func (m *model) tableBounds() paneBounds {
-	b := paneBounds{0, 4, m.width, m.height - 6}
+	b := m.bodyBounds()
 	d := m.inspectorDimensions()
 	if d.bottom {
 		b.height -= d.height
@@ -23,7 +23,7 @@ func (m *model) inspectorBounds() paneBounds {
 	if d.bottom {
 		return paneBounds{0, m.height - 2 - d.height, d.width, d.height}
 	}
-	return paneBounds{m.width - d.width, 4, d.width, d.height}
+	return paneBounds{m.width - d.width, m.bodyBounds().y, d.width, d.height}
 }
 
 func (m *model) mouseClick(v tea.MouseClickMsg) {
@@ -92,6 +92,16 @@ func (m *model) mouseWheel(v tea.MouseWheelMsg) {
 	if key == "left" || key == "right" {
 		steps = 1
 	}
+	if m.mode == "picker" && m.pickerKind == "inspector-position" {
+		if m.modalBounds().interior(v.X, v.Y) {
+			if key == "up" {
+				m.pickerKey(tea.KeyPressMsg{Code: tea.KeyUp})
+			} else if key == "down" {
+				m.pickerKey(tea.KeyPressMsg{Code: tea.KeyDown})
+			}
+		}
+		return
+	}
 	if m.showingHelp() {
 		if _, pane, ok := m.helpPaneAt(v.X, v.Y); ok {
 			for range steps {
@@ -101,7 +111,7 @@ func (m *model) mouseWheel(v tea.MouseWheelMsg) {
 		return
 	}
 	if m.showingLogs() || m.showingEventPanel() {
-		bounds := paneBounds{0, 4, m.width, m.height - 6}
+		bounds := m.bodyBounds()
 		if m.showingLogs() && m.logFullScreen {
 			bounds = paneBounds{-1, -1, m.width + 2, m.panel.Height() + 2}
 		}

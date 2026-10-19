@@ -256,11 +256,11 @@ func (m *model) debugKey(v tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if v.String() == "pgup" {
+	if v.String() == "pgup" || v.String() == "ctrl+b" {
 		m.panel.PageUp()
 		return nil
 	}
-	if v.String() == "pgdown" {
+	if v.String() == "pgdown" || v.String() == "ctrl+f" {
 		m.panel.PageDown()
 		return nil
 	}

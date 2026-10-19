@@ -44,6 +44,7 @@ type config struct {
 	InspectorFormat   string                   `toml:"inspector_format,omitempty" yaml:"inspector_format,omitempty"`
 	InspectorPosition string                   `toml:"inspector_position,omitempty" yaml:"inspector_position,omitempty"`
 	InspectorVisible  *bool                    `toml:"inspector_visible,omitempty" yaml:"inspector_visible,omitempty"`
+	HeaderVisible     *bool                    `toml:"header_visible,omitempty" yaml:"header_visible,omitempty"`
 	Refresh           string                   `toml:"refresh_interval" yaml:"refresh_interval"`
 	Editor            string                   `toml:"editor,omitempty" yaml:"editor,omitempty"`
 	Shell             string                   `toml:"shell,omitempty" yaml:"shell,omitempty"`
@@ -312,6 +313,7 @@ all_namespaces: false
 inspector_format: yaml
 # inspector_position: right # right or bottom; I opens the placement chooser
 # inspector_visible: true # i toggles; omitted uses the selected layout's default
+# header_visible: true # z toggles the explorer header
 refresh_interval: 2s
 # read_only: true # disables resource changes and shells
 # editor: "code --wait" # default: $EDITOR, then $VISUAL, then vi

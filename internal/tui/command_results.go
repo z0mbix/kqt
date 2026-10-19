@@ -63,11 +63,11 @@ func (m *model) executeSubmittedCommand(value string) tea.Cmd {
 	word, arg, _ := strings.Cut(value, " ")
 	arg = strings.TrimSpace(arg)
 	// These commands complete locally, or successfully open a local picker.
-	local := slices.Contains([]string{"q", "quit", "theme", "themes", "resources", "api", "actions", "layout", "layouts", "write", "inspector", "sort", "columns", "copy", "download-dir", "alias", "unalias", "forwards", "help"}, word) || slices.Contains([]string{"ctx", "context", "contexts"}, word) && arg == "" || word == "forward" && strings.HasPrefix(arg, "stop ")
+	local := slices.Contains([]string{"q", "quit", "theme", "themes", "resources", "api", "actions", "layout", "layouts", "write", "inspector", "header", "sort", "columns", "copy", "download-dir", "alias", "unalias", "forwards", "help"}, word) || slices.Contains([]string{"ctx", "context", "contexts"}, word) && arg == "" || word == "forward" && strings.HasPrefix(arg, "stop ")
 	if local {
 		// Only the explicit success notices below are positive local results.
 		success := m.notice == "" || m.mode == "help"
-		for _, prefix := range []string{"Saved layout ", "Download directory:", "Context alias saved:", "Context alias removed:", "Stopping", "Inspector shown", "Inspector hidden", "Inspector enabled"} {
+		for _, prefix := range []string{"Saved layout ", "Download directory:", "Context alias saved:", "Context alias removed:", "Stopping", "Inspector shown", "Inspector hidden", "Inspector enabled", "Header shown", "Header hidden"} {
 			success = success || strings.HasPrefix(m.notice, prefix)
 		}
 		if cmd != nil && word == "copy" {

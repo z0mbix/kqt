@@ -353,6 +353,70 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
                 send(':deploy\r'); expect('live')
                 send(':scale 2\r'); expect('Confirm scale'); send('default/web\r'); expect('scale requested')
                 send(':pods\r'); expect('live'); send(':nodes\r'); expect('nodes [3]'); expect('live')
+        elif args.feature=='header':
+            assert not args.kubeconfig, 'header PTY workflow uses the demo backend'
+            for width,height,layout in [(80,24,'classic'),(180,48,'inspector'),(80,40,'bottom')]:
+                resize_events.append((len(raw),width,height))
+                fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
+                os.killpg(process.pid,signal.SIGWINCH); pump(0.3)
+                send(':layout '+layout+'\r'); expect('Context:')
+                send('z'); expect('Header hidden')
+                current=screen(raw,width,height,resize_events)
+                assert current.splitlines()[0].startswith('╭') and 'Context:' not in current, 'hidden header left a gap'
+                assert 'header_visible: false' in config.read_text(), 'hidden state was not saved'
+                send(':sort name asc\r')
+                header=screen(raw,width,height,resize_events).splitlines()[1]
+                x=header.index('NAME')+1
+                send(f'\x1b[<0;{x};2M\x1b[<0;{x};2m')
+                assert 'NAME ↓' in screen(raw,width,height,resize_events).splitlines()[1], 'headerless column click failed'
+                send('Rz'); expect('Context:')
+                assert 'header_visible: true' in config.read_text(), 'shown state was not saved'
+            send(':header off\r'); expect('Header hidden')
+            send('L'); expect('Containers'); send('\r'); expect('live heartbeat')
+            assert screen(raw,width,height,resize_events).splitlines()[0].startswith('╭'), 'logs retained the header gap'
+            send('f')
+            assert '╭' not in screen(raw,width,height,resize_events), 'logs-only focus retained a frame'
+            send('f')
+            assert screen(raw,width,height,resize_events).splitlines()[0].startswith('╭'), 'leaving logs-only focus lost hidden-header layout'
+            send('z'); expect('Context:'); send('z'); expect('Header hidden'); send('\x1b')
+            send('S'); expect('Status'); send('z'); expect('Context:'); send('z'); expect('Header hidden'); send('\x1b')
+            send(':header typo\r'); expect('Use :header')
+            assert 'header typo' not in config.read_text(), 'invalid command entered history'
+            send('q')
+            end=time.monotonic()+5
+            while b'__kqt_exit__0' not in raw and time.monotonic()<end: pump()
+            assert b'__kqt_exit__0' in raw and original==termios.tcgetattr(slave), 'first session did not restore terminal'
+            send('\n'); process.wait(timeout=5)
+            os.close(master); os.close(slave)
+            master,slave=os.openpty()
+            fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
+            original=termios.tcgetattr(slave)
+            raw.clear(); resize_events=[(0,width,height)]
+            process=subprocess.Popen([sys.executable,'-c',wrapper,*launch],stdin=slave,stdout=slave,stderr=slave,preexec_fn=setup_child,env=dict(os.environ,TERM='xterm-256color',COLORTERM='truecolor'))
+            expect('pods [12]')
+            assert 'Context:' not in screen(raw,width,height,resize_events), 'restart lost hidden-header preference'
+            send(':header on\r'); expect('Context:')
+        elif args.feature=='paging':
+            assert not args.kubeconfig, 'paging PTY workflow uses the demo backend'
+            def expect_selected(index):
+                current=screen(raw,width,height,resize_events)
+                assert re.search(r'›\s+web-7c9f6d8b5-'+f'{index:04d}',current), 'wrong selected row:\n'+current
+            for width,height,layout,page in [(80,12,'classic',3),(80,24,'bottom',8)]:
+                resize_events.append((len(raw),width,height))
+                fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
+                os.killpg(process.pid,signal.SIGWINCH); pump(0.3)
+                send(':layout '+layout+'\r'); send('g'); expect_selected(0)
+                send('\x06'); expect_selected(page) # Ctrl+F, full page forward.
+                send('\x02'); expect_selected(0) # Ctrl+B, full page backward.
+                send('\x1b[6~'); expect_selected(page)
+                send('\x1b[5~'); expect_selected(0)
+                send('\x04'); expect_selected(page//2)
+                send('\x15'); expect_selected(0)
+            send('?'); expect('Navigation')
+            send('\x06')
+            assert 'Navigation' not in screen(raw,width,height,resize_events), 'Ctrl+F did not page help'
+            send('\x02'); expect('Navigation'); send('\x1b')
+            send(':themes\x02X'); expect(':themeXs'); send('\x1b')
         elif args.feature=='inspector':
             for width,height in [(180,48),(80,24)]:
                 resize_events.append((len(raw),width,height))
@@ -364,7 +428,22 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
                 send('i'); expect('Inspector hidden')
                 assert 'Inspector · YAML' not in screen(raw,width,height,resize_events)
                 assert 'inspector_visible: false' in config.read_text()
-                send('I'); expect('Inspector position'); send('\x1b')
+                before_preview=config.read_text()
+                send('I'); expect('Inspector position')
+                if width>=120:
+                    def inspector_title_row():
+                        current=screen(raw,width,height,resize_events)
+                        return next(i for i,line in enumerate(current.splitlines()) if 'Inspector · YAML' in line)
+                    assert inspector_title_row()==4, 'right preview is not beside the list'
+                    send('\x1b[B')
+                    assert inspector_title_row()>4, 'arrow did not preview bottom placement'
+                    send('\x1b[A')
+                    assert inspector_title_row()==4, 'arrow did not preview right placement'
+                    send(f'\x1b[<65;{width//2};{height//2}M')
+                    assert inspector_title_row()>4, 'wheel did not preview bottom placement'
+                assert config.read_text()==before_preview, 'preview changed the config'
+                send('\x1b')
+                assert 'Inspector · YAML' not in screen(raw,width,height,resize_events), 'cancel left a preview visible'
                 assert 'inspector_visible: false' in config.read_text(), 'cancel changed visibility'
                 send('Ibottom\r'); expect('Inspector shown at bottom'); expect('Inspector · YAML')
                 assert 'inspector_position: bottom' in config.read_text()

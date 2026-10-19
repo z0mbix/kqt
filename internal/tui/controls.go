@@ -161,6 +161,10 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
+	if k == "z" && (m.mode == "" || m.mode == "logs" || m.mode == "events") {
+		m.toggleHeader()
+		return nil
+	}
 	if m.mode != "" {
 		if k == "ctrl+r" && m.mode == "operation-error" && (m.panelTitle == "Rollout history" || m.panelTitle == "Rollout history unavailable") {
 			return m.openRollouts(0)
@@ -411,10 +415,14 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.move(1)
 	case "k", "up":
 		m.move(-1)
-	case "ctrl+d", "pgdown":
-		m.move(max(1, (m.height-9)/2))
-	case "ctrl+u", "pgup":
-		m.move(-max(1, (m.height-9)/2))
+	case "ctrl+f", "pgdown":
+		m.move(max(1, m.tableBounds().height-3))
+	case "ctrl+b", "pgup":
+		m.move(-max(1, m.tableBounds().height-3))
+	case "ctrl+d":
+		m.move(max(1, (m.tableBounds().height-3)/2))
+	case "ctrl+u":
+		m.move(-max(1, (m.tableBounds().height-3)/2))
 	case "g", "home":
 		m.move(-len(m.visible))
 	case "G", "end":
@@ -722,6 +730,8 @@ func (m *model) command(value string) tea.Cmd {
 		}
 	case "write":
 		m.saveLayout(arg)
+	case "header":
+		m.headerCommand(arg)
 	case "inspector":
 		switch arg {
 		case "", "position":
@@ -849,6 +859,7 @@ func (m *model) command(value string) tea.Cmd {
 	return nil
 }
 func (m *model) openPicker(kind string) tea.Cmd {
+	m.cancelInspectorPreview()
 	m.pickerReturn = ""
 	if (kind == "containers" || kind == "log-options") && m.mode == "logs" {
 		m.pickerReturn = "logs"
@@ -860,6 +871,7 @@ func (m *model) openPicker(kind string) tea.Cmd {
 	m.pickerIndex = 0
 	switch kind {
 	case "inspector-position":
+		m.beginInspectorPreview()
 		m.choices = []choice{{"right", "beside the resource list"}, {"bottom", "below the resource list"}}
 		if m.inspectorPlacement() == "bottom" {
 			m.pickerIndex = 1
@@ -965,6 +977,7 @@ func (m *model) filterChoices() {
 		m.matches = append(m.matches, c.choice)
 	}
 	m.pickerIndex = min(m.pickerIndex, max(0, len(m.matches)-1))
+	m.previewInspectorPosition()
 }
 func (m *model) pickerKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
@@ -991,6 +1004,7 @@ func (m *model) pickerKey(msg tea.KeyPressMsg) tea.Cmd {
 		if m.pickerKind == "themes" {
 			m.setTheme(m.previousTheme)
 		}
+		m.cancelInspectorPreview()
 		m.mode = m.pickerReturn
 		m.input.Blur()
 		m.resize()
@@ -1096,6 +1110,7 @@ func (m *model) pickerKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.pickerKind == "themes" && len(m.matches) > 0 {
 		m.setTheme(m.settings.Themes[m.matches[m.pickerIndex].name])
 	}
+	m.previewInspectorPosition()
 	return nil
 }
 
@@ -1104,7 +1119,8 @@ const helpText = `kqt · A Kubernetes Query Tool
 Navigation
   j/k, arrows        Move through resources
   g/G, Home/End      First / last row
-  Ctrl+U/D, PgUp/Dn  Page rows or panels
+  Ctrl+F/B, PgDn/Up  Full page down / up in lists and focused panels
+  Ctrl+D/U          Half page down / up in lists and focused panels
   h/l, left/right    Scroll wide tables and manifests
   Shift+Left/Right   Sort previous / next column (also [ / ])
   O / R              Sort next column / reverse current order
@@ -1171,13 +1187,15 @@ Explore
   D / :delete        Compact Yes/No confirmation; No selected initially
 
 Appearance and saved settings
+  z / :header        Toggle the explorer header; saved between sessions
+  :header on|off     Show / hide the header (:header toggle also works)
   :download-dir PATH  Default directory for all file exports; clear resets it
   t / :themes        Fuzzy theme picker; Escape cancels previews
   :layouts           Search and apply saved layout profiles
   :layout NAME       Apply layout directly
   :write NAME        Save current arrangement and columns as a layout
   i                  Toggle inspector off/on; remember its position
-  I / :inspector     Choose inspector position: right or bottom
+  I / :inspector     Preview right/bottom placement; Enter saves, Esc restores
   :inspector json    Also yaml, right, bottom, on, off, toggle (none = off)
   w                  Wide fields
   :sort              Column picker; :sort COLUMN asc|desc sets an order

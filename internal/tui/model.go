@@ -174,6 +174,7 @@ type model struct {
 	detailFormat                             string
 	inspectedKey, inspectorContent           string
 	inspectorFocused                         bool
+	inspectorPreview                         *inspectorPreview
 	secretToken                              uint64
 	secretCancel                             context.CancelFunc
 	secretTarget                             string
@@ -308,6 +309,7 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.connect(m.contextName), m.themeTimeout())
 }
 func (m *model) close() {
+	m.cancelInspectorPreview()
 	m.cancelBundle()
 	m.commandExecutions = nil
 	m.cancelRollouts()
@@ -459,6 +461,7 @@ func (m *model) poll() tea.Cmd {
 	return tea.Tick(delay, func(time.Time) tea.Msg { return pollMsg{g, id} })
 }
 func (m *model) navigate(r route, remember bool) tea.Cmd {
+	m.cancelInspectorPreview()
 	m.cancelBundle()
 	m.cancelDebug()
 	m.cancelRollouts()
