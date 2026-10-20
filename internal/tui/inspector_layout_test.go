@@ -29,7 +29,7 @@ func TestInspectorToggleRemembersPositionWithoutChangingLayoutOrView(t *testing.
 		t.Fatal("i did not just hide the inspector")
 	}
 	key(m, "i")
-	if !m.inspectorVisible() || !m.inspectorDimensions().bottom || m.inspectorPlacement() != "bottom" || m.inspectorDimensions().height != (m.height-6)*55/100 {
+	if !m.inspectorVisible() || !m.inspectorDimensions().bottom || m.inspectorPlacement() != "bottom" || m.inspectorDimensions().height != m.bodyBounds().height*55/100 {
 		t.Fatal("i did not restore the previous placement and size")
 	}
 	if o, _ := m.current(); o.GetUID() != selected.GetUID() || !slices.Equal(m.columns(), columns) || m.sortColumn != "age" || !m.descending {

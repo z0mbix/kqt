@@ -798,3 +798,24 @@ checks. Native terminal scenarios passed for paging, header visibility/restart,
 inspector placement previews, help and log controls. The classic 80x24, inspector
 180x48 and bottom 80x40 baseline/restart suite also passed. The binary was rebuilt
 locally, and the new paging/header scenarios are included in CI and `just smoke`.
+
+## v0.5.2 header and wide-view qualification
+
+The header now occupies one row, with context/namespace/connection information
+on the left and the responsive application title on the right. The server URL
+and duplicate resource breadcrumb are removed; active selectors and filters stay
+in the resource frame title. Production-name highlighting covers case-insensitive
+matches and non-/pre-production exclusions, including real context names behind
+aliases. Theme announcements and the saved header toggle remain supported.
+
+Wide columns use spare table space beyond the previous 64-cell cap. Label
+keys, values, equals signs and spaced commas use semantic theme styles; selected
+tokens retain readable contrast, including ANSI-256 accessible themes and
+monochrome emphasis. Empty values, Unicode clipping, terminal-control
+sanitization, custom columns, resizing and mouse sorting have focused coverage.
+
+Go race tests, vet and fifteen Python checks passed. Baseline terminal workflows
+and persisted-setting restarts passed at 80x24, 180x48 and 80x40. Focused terminal
+scenarios passed for header visibility, paging, inspector placement, log controls
+and log options. The new wide-view terminal scenario passed at 80, 240 and 320
+columns and is included in CI and `just smoke`.

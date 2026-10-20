@@ -96,6 +96,15 @@ name; the context picker also shows the real name. `:alias` lists aliases and
 `:unalias prod` removes one. Aliases live in kqt's config and leave kubeconfig
 unchanged. Saved views and namespaces stay attached to the real context name.
 
+The single-line header shows the context, namespace and connection state, with
+the kqt title on the right (shortened to `kqt` on narrower terminals). Context
+names containing `prod`, `production` or `prd` are highlighted in the theme's
+error colour. Matching ignores case and excludes `nonprod`, `non-prod`,
+`non-production`, `nonprd`, `preprod`, `preprd`, `pre-prod`, `pre-production` and
+`pre-prd` (also their underscore/dot variants). Both the real context name and
+its alias are checked; a separate production marker still takes precedence.
+The `no-color` theme uses reverse video and underlining for production contexts.
+
 ## Explore
 
 Shortcut bars and the `?` / `:help` view highlight keys in the active theme's
@@ -155,7 +164,7 @@ Escape outside search to close it. Reopening help starts with the full view.
 | `:layouts`, `:layout NAME` | Choose a saved layout |
 | `:write NAME` | Save current arrangement, columns, sort, and wide state |
 | `i` | Toggle the inspector off/on, remembering its position |
-| `z`, `:header [on\|off\|toggle]` | Toggle the four-line explorer header; saved between sessions |
+| `z`, `:header [on\|off\|toggle]` | Toggle the single-line explorer header; saved between sessions |
 | `I` (Shift+i), `:inspector` | Choose inspector position: right or bottom |
 | `w` | Toggle wide fields |
 | `O` | Sort by the next visible column, ascending; wraps to the first |
@@ -177,7 +186,7 @@ uses the other position if it fits, returning to your chosen position after a
 resize. Selecting a saved layout applies that layout's visibility and position;
 `:write NAME` captures the current inspector arrangement.
 
-Hiding the header gives its four rows to the resource list and inspector, or to
+Hiding the header gives its row to the resource list and inspector, or to
 the open logs/status view. The status and shortcut bars remain available. Press
 `z` again to restore it, or set `header_visible: false` in your config.
 
@@ -457,7 +466,7 @@ Settings live in `$XDG_CONFIG_HOME/kqt/config.yaml`, or
 preferences are saved. View and namespace are saved automatically, per context.
 Theme selection, header visibility, inspector format, and chosen layout are also saved. Launch flags
 override saved values. A theme preview is not saved until Enter; Escape cancels it.
-The theme name appears on the connection line for ten seconds after selection.
+The theme name appears in the header for ten seconds after selection.
 
 ```sh
 kqt config                      # Print a YAML example
@@ -515,6 +524,11 @@ right inspector; full-screen details stay available.
 JSON Pointer columns such as `/spec/replicas` and
 `/metadata/labels/app.kubernetes.io~1name` are supported. Numeric fields sort
 numerically; age uses creation time.
+
+Wide mode (`w`) lets long columns use spare table space before truncating;
+smaller terminals keep horizontal scrolling. Labels use `key=value, key=value`
+spacing, with distinct theme colours for keys, values, equals signs and commas.
+The selected row keeps readable contrast, and `no-color` uses text emphasis.
 
 kqt bundles 37 themes, including `material`, `palenight`, `dracula`, `darcula`,
 `monokai`, `ubuntu`, `lemonade`, and `pink-lemonade`. The VS Code references are

@@ -18,11 +18,11 @@ func TestResourcePagingUsesVisibleRows(t *testing.T) {
 		width, height int
 		page          int
 	}{
-		{"classic", 80, 24, 15},
-		{"inspector", 180, 48, 39},
-		{"bottom", 80, 40, 19},
-		{"inspector", 80, 24, 8}, // Right inspector falls back to bottom.
-		{"classic", 40, 12, 3},
+		{"classic", 80, 24, 18},
+		{"inspector", 180, 48, 42},
+		{"bottom", 80, 40, 20},
+		{"inspector", 80, 24, 11}, // Right inspector falls back to bottom.
+		{"classic", 40, 12, 6},
 	} {
 		t.Run(fmt.Sprintf("%s-%dx%d", tc.layout, tc.width, tc.height), func(t *testing.T) {
 			m := demoModel(t)

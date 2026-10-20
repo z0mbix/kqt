@@ -72,7 +72,7 @@ func TestLogFocusFillsTerminalAndEscapeKeepsStream(t *testing.T) {
 					}
 				}
 				key(m, "esc")
-				if m.logFullScreen || m.mode != "logs" || m.logFeed != feed || m.logToken != token || ctx.Err() != nil || m.panel.Height() != size[1]-8 {
+				if m.logFullScreen || m.mode != "logs" || m.logFeed != feed || m.logToken != token || ctx.Err() != nil || m.panel.Height() != size[1]-5 {
 					t.Fatal("leaving focus closed or reset the log session")
 				}
 				key(m, "esc")
@@ -313,11 +313,12 @@ func TestTextSelectionRespectsPanesAndRejectsChangedContent(t *testing.T) {
 		}
 	}
 	m := selectionLogModel(t, 80, 24, "INFO visible log", false)
+	y := m.bodyBounds().y
 	for _, press := range []tea.MouseClickMsg{
-		{X: 0, Y: 6, Button: tea.MouseLeft}, // Border.
-		{X: 2, Y: 4, Button: tea.MouseLeft}, // Title.
-		{X: 2, Y: 6, Button: tea.MouseRight},
-		{X: 2, Y: 6, Button: tea.MouseLeft, Mod: tea.ModShift},
+		{X: 0, Y: y + 2, Button: tea.MouseLeft}, // Border.
+		{X: 2, Y: y, Button: tea.MouseLeft},     // Title.
+		{X: 2, Y: y + 2, Button: tea.MouseRight},
+		{X: 2, Y: y + 2, Button: tea.MouseLeft, Mod: tea.ModShift},
 	} {
 		m.Update(press)
 		if m.selection != nil {
@@ -355,7 +356,7 @@ func TestDragCopyInReadableModalsAndResourceTabs(t *testing.T) {
 		m.panel.SetContent("INFO visible panel\nsecond line")
 		point := textPoint{3, 3}
 		if mode == "events" {
-			point = textPoint{1, 6} // Below the pinned resource tabs.
+			point = textPoint{1, m.bodyBounds().y + 2} // Below the pinned resource tabs.
 		}
 		if mode == "help" {
 			point = textPoint{3, 4} // Below the help pane headings.

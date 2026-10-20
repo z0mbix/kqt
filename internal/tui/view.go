@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -138,17 +137,23 @@ func (m *model) tableGeometry(width int) tableGeometry {
 	desired := make([]int, len(cols))
 	total := 2
 	inner := width - 2
+	limit := 64
+	if m.wide {
+		limit = max(limit, inner-2)
+	}
 	for i, c := range cols {
 		widths[i] = min(12, max(4, ansi.StringWidth(heading(c))+2))
 		desired[i] = widths[i]
 		for _, o := range m.visible {
-			desired[i] = max(desired[i], min(64, ansi.StringWidth(kube.Safe(m.column(o, c)))))
+			desired[i] = max(desired[i], min(limit, ansi.StringWidth(m.tableCellText(o, c))))
 		}
 		if c == "name" {
-			desired[i] = min(64, desired[i]+1)
+			desired[i] = min(limit, desired[i]+1)
 		}
 		if m.wide {
-			widths[i] = desired[i]
+			// Keep useful widths when scrolling a narrow table, then let long
+			// fields share any spare space instead of stopping at 64 cells.
+			widths[i] = min(64, desired[i])
 		}
 		total += widths[i] + 1
 	}
@@ -160,21 +165,21 @@ func (m *model) tableGeometry(width int) tableGeometry {
 				total += growth
 			}
 		}
-		for total < inner {
-			changed := false
-			for i := range widths {
-				if widths[i] < desired[i] {
-					widths[i]++
-					total++
-					changed = true
-					if total >= inner {
-						break
-					}
+	}
+	for total < inner {
+		changed := false
+		for i := range widths {
+			if widths[i] < desired[i] {
+				widths[i]++
+				total++
+				changed = true
+				if total >= inner {
+					break
 				}
 			}
-			if !changed {
-				break
-			}
+		}
+		if !changed {
+			break
 		}
 	}
 	x := min(m.horizontal, max(0, total-inner))
@@ -213,7 +218,10 @@ func (m *model) table(width, height int) string {
 		o := m.visible[i]
 		cells = nil
 		for j, c := range cols {
-			value := fit(kube.Safe(m.column(o, c)), widths[j])
+			value := fit(m.tableCellText(o, c), widths[j])
+			if c == "labels" {
+				value = m.theme.renderTableLabels(value, i == m.selected)
+			}
 			if (c == "status" || o.GetKind() == "Event" && c == "type") && i != m.selected {
 				value = m.theme.style(m.statusToken(kube.Status(o))).Render(value)
 			}
@@ -247,6 +255,17 @@ func (m *model) table(width, height int) string {
 		title = "resources"
 	}
 	title += fmt.Sprintf(" [%d]", len(m.visible))
+	for _, scope := range []string{m.route.labels, m.route.fields} {
+		if scope != "" {
+			title += " · " + scope
+		}
+	}
+	if m.filter != "" {
+		title += " / " + m.filter
+	}
+	if m.wide {
+		title += " · wide"
+	}
 	if m.eventGlobal && m.route.resource.Kind == "Event" {
 		title += " · " + m.eventViewState()
 	}
@@ -339,58 +358,9 @@ func (m *model) baseView() tea.View {
 	} else if w < 40 || h < 12 {
 		content = fit("kqt needs at least 40×12. Resize or press q.", w)
 	} else {
-		ns := m.route.namespace
-		if ns == "" {
-			ns = "all"
-		}
-		ctx := m.contextLabel(m.contextName)
-		if ctx == "" {
-			ctx = "select context"
-		}
-		state := "connected"
-		if m.backend == nil {
-			state = "disconnected"
-		}
-		if m.busy && (m.backend == nil || m.lastRefresh.IsZero()) {
-			state = "loading"
-		}
-		if m.dataErr != "" {
-			state = "stale / disconnected"
-		}
-		if m.resourceFeed != nil || m.resourceWatchError != "" {
-			state += " · " + m.resourceWatchLabel()
-		}
-		brand := " kqt  ·  A Kubernetes Query Tool"
-		if m.options.ReadOnly {
-			brand += " · READ ONLY"
-		}
-		if m.options.Demo {
-			brand += "  ·  DEMO"
-		}
-		connectionLine := " " + kube.Safe(m.server) + " · " + state
-		if time.Now().Before(m.themeUntil) {
-			connectionLine += " · " + m.theme.Name
-		}
-		contextLine := " Context: " + kube.Safe(ctx) + "  ·  Namespace: " + kube.Safe(ns) + "  ·  Explorer · " + m.shortcuts("", shortcut{"e", "edit"})
 		var lines []string
 		if m.headerVisible() {
-			lines = append(lines, m.theme.style("accent").Bold(true).Render(fit(brand, w)), m.theme.style("foreground").Render(fit(contextLine, w)), m.theme.style("muted").Render(fit(connectionLine, w)))
-		}
-		breadcrumb := " " + m.route.resource.ID()
-		if m.route.labels != "" {
-			breadcrumb += " · " + kube.Safe(m.route.labels)
-		}
-		if m.route.fields != "" {
-			breadcrumb += " · " + kube.Safe(m.route.fields)
-		}
-		if m.filter != "" {
-			breadcrumb += " / " + kube.Safe(m.filter)
-		}
-		if m.wide {
-			breadcrumb += " · wide"
-		}
-		if m.headerVisible() {
-			lines = append(lines, m.theme.style("foreground").Render(fit(breadcrumb, w)))
+			lines = append(lines, m.headerView())
 		}
 		bodyHeight := m.bodyBounds().height
 		d := m.inspectorDimensions()

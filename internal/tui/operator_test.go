@@ -111,7 +111,7 @@ func TestLogsFillMainPaneWithoutInspectorShowingThrough(t *testing.T) {
 						t.Fatalf("%dx%d %s %s line width is %d", size[0], size[1], layout, mode, ansi.StringWidth(line))
 					}
 				}
-				if !strings.Contains(ansi.Strip(lines[2]), "connected") {
+				if size[0] >= 80 && !strings.Contains(ansi.Strip(lines[0]), "connected") {
 					t.Fatal("log view hid the cluster connection header")
 				}
 			}

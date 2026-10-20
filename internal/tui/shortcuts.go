@@ -97,5 +97,9 @@ func (m *model) footerHelp(d dimensions) string {
 	if m.mode == "rollout-details" {
 		hints = []shortcut{{"d", "compare"}, {"y", "template"}, {"r", "rollback"}, {"Ctrl+R", "reload"}, {"Esc", "revisions"}}
 	}
+	if m.mode == "" {
+		hints = append([]shortcut{{"e", "edit"}}, hints...)
+		return m.theme.style("muted").Render(" Explorer · ") + m.shortcuts("  ", hints...)
+	}
 	return " " + m.shortcuts("  ", hints...)
 }

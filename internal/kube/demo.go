@@ -49,6 +49,15 @@ func NewDemo() *Demo {
 	}
 	for i := 1; i <= 3; i++ {
 		add("v1", "Node", "", fmt.Sprintf("worker-%d", i), nil, map[string]interface{}{"conditions": []interface{}{map[string]interface{}{"type": "Ready", "status": "True"}}, "nodeInfo": map[string]interface{}{"kubeletVersion": "v1.36.0", "architecture": "arm64", "operatingSystem": "linux"}, "allocatable": map[string]interface{}{"cpu": "4", "memory": "8Gi"}})
+		d.objects[len(d.objects)-1].SetLabels(map[string]string{
+			"kubernetes.io/arch":               "arm64",
+			"kubernetes.io/hostname":           fmt.Sprintf("worker-%d", i),
+			"kubernetes.io/os":                 "linux",
+			"node.kubernetes.io/instance-type": "standard-4",
+			"node-role.kubernetes.io/worker":   "",
+			"topology.kubernetes.io/region":    "eu-west-2",
+			"topology.kubernetes.io/zone":      fmt.Sprintf("eu-west-2%c", 'a'+i-1),
+		})
 	}
 	for i := 0; i < 24; i++ {
 		ns, app := "default", "web"

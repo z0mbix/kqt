@@ -8,10 +8,133 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
+
+func TestProductionContextMatching(t *testing.T) {
+	for _, name := range []string{
+		"prod", "production", "prd", "PRODUCTION", "eu-prod-eks", "clusterprd01",
+		"arn:aws:eks:eu-west-2:123456789012:cluster/production",
+		"non-prod-to-prod", "pre-production/prd", "prod-nonprod",
+	} {
+		if !productionContext(name) {
+			t.Errorf("production context %q was not detected", name)
+		}
+	}
+	for _, name := range []string{
+		"", "dev", "staging", "nonprod", "non-prod", "non-production", "nonprd",
+		"preprod", "preprd", "pre-prod", "pre-production", "pre-prd",
+		"eu-NON-PRODUCTION-eks", "arn:aws:eks:eu-west-2:123:cluster/preprod",
+		"non_production", "pre.prd", "nonprod-pre-production",
+	} {
+		if productionContext(name) {
+			t.Errorf("non-production context %q was highlighted", name)
+		}
+	}
+}
+
+func TestHeaderContextHighlightAcrossThemesAndAliases(t *testing.T) {
+	m := demoModel(t)
+	m.width = 240
+	for name, palette := range builtThemes() {
+		t.Run(name, func(t *testing.T) {
+			m.theme = palette
+			for _, tc := range []struct {
+				context, alias string
+				production     bool
+			}{
+				{"demo", "", false}, {"demo", "non-production", false},
+				{"demo", "prod", true}, {"eks-production", "friendly", true},
+				{"eks-pre-production", "friendly", false},
+			} {
+				m.contextName = tc.context
+				m.settings.Config.ContextAliases = map[string]string{}
+				label := tc.context
+				if tc.alias != "" {
+					m.settings.Config.ContextAliases[tc.alias] = tc.context
+					label = tc.alias
+				}
+				style := palette.style("accent").Bold(true)
+				if tc.production {
+					style = palette.style("error").Bold(true)
+					if name == "no-color" {
+						style = style.Underline(true).Reverse(true)
+					}
+				}
+				if !strings.Contains(m.headerView(), style.Render(label)) {
+					t.Errorf("context %q alias %q lost its expected highlight", tc.context, tc.alias)
+				}
+			}
+		})
+	}
+}
+
+func TestCompactHeaderAndFooterLayout(t *testing.T) {
+	m := demoModel(t)
+	m.selectLayout("classic")
+	m.server = "https://private-cluster.example.com:6443"
+	m.themeUntil = time.Time{}
+	for _, width := range []int{40, 80, 110, 180} {
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		rows := strings.Split(ansi.Strip(m.View().Content), "\n")
+		if m.headerHeight() != 1 || len(rows) != 24 || !strings.HasPrefix(rows[1], "╭") || !strings.Contains(rows[1], "pods [") {
+			t.Fatal("resource frame does not immediately follow the single-line header")
+		}
+		if !strings.Contains(rows[0], "Context: demo") || !strings.HasSuffix(rows[0], " · DEMO ") {
+			t.Fatalf("header lost its context or right-aligned title: %q", rows[0])
+		}
+		if width >= 110 && !strings.HasSuffix(rows[0], "kqt · A Kubernetes Query Tool · DEMO ") {
+			t.Fatal("wide header did not show the full title at the right edge")
+		}
+		if strings.Contains(rows[0], "Explorer") || strings.Contains(strings.Join(rows[:2], "\n"), m.server) || !strings.HasPrefix(rows[23], " Explorer · e: edit") {
+			t.Fatal("server URL or explorer help is in the wrong place")
+		}
+	}
+	// Long names, Unicode and terminal controls cannot wrap the header or push
+	// the brand offscreen. READ ONLY remains visible even at the minimum width.
+	m.options.ReadOnly = true
+	m.contextName = strings.Repeat("prod-界e\u0301", 20) + "\x1b]52;c;payload\a"
+	m.route.namespace = strings.Repeat("namespace-", 20)
+	for _, width := range []int{40, 80, 180} {
+		m.width = width
+		row := ansi.Strip(m.headerView())
+		if ansi.StringWidth(row) != width || strings.ContainsAny(row, "\x1b\a\n") || !strings.HasSuffix(row, "kqt · READ ONLY · DEMO ") {
+			t.Fatalf("header overflow or unsafe text at width %d: %q", width, row)
+		}
+	}
+}
+
+func TestRemovedBreadcrumbPreservesScopeInResourceFrame(t *testing.T) {
+	m := demoModel(t)
+	m.selectLayout("classic")
+	m.Update(tea.WindowSizeMsg{Width: 240, Height: 24})
+	m.route.labels, m.route.fields, m.filter, m.wide = "app=web", "status.phase=Running", "web0003", true
+	for _, visible := range []bool{true, false} {
+		m.settings.Config.HeaderVisible = &visible
+		row := strings.Split(ansi.Strip(m.View().Content), "\n")[m.headerHeight()]
+		for _, scope := range []string{"pods [", "app=web", "status.phase=Running", " / web0003", " · wide"} {
+			if !strings.Contains(row, scope) {
+				t.Errorf("resource frame lost %q when removing breadcrumb", scope)
+			}
+		}
+	}
+}
+
+func TestCompactHeaderKeepsThemeAnnouncementsAndConnectionState(t *testing.T) {
+	m := demoModel(t)
+	m.width = 80
+	for name, palette := range builtThemes() {
+		m.theme = palette
+		m.themeUntil = time.Now().Add(10 * time.Second)
+		row := ansi.Strip(m.headerView())
+		if !strings.Contains(row, name) || !strings.Contains(row, "connected") || ansi.StringWidth(row) != m.width {
+			t.Errorf("compact header lost theme announcement or connection state: %s", row)
+		}
+	}
+}
 
 func TestHeaderToggleReclaimsRowsAndPreservesLayout(t *testing.T) {
 	for _, size := range [][2]int{{40, 12}, {80, 24}, {180, 48}} {
@@ -40,7 +163,7 @@ func TestHeaderToggleReclaimsRowsAndPreservesLayout(t *testing.T) {
 					}
 					want := before
 					if !visible {
-						want += 4
+						want++
 						if !strings.HasPrefix(rows[0], "╭") || m.tableBounds().y != 0 {
 							t.Fatal("hidden header left unused space above the table")
 						}
@@ -162,7 +285,7 @@ func TestHiddenHeaderMouseAndPagingGeometry(t *testing.T) {
 	m.selected = 0
 	pageKey(m, 'f')
 	if m.selected != 19 {
-		t.Fatal("paging did not include the four reclaimed rows")
+		t.Fatal("paging did not include the reclaimed header row")
 	}
 	m.placeInspector("right")
 	m.Update(tea.WindowSizeMsg{Width: 180, Height: 24})
@@ -178,7 +301,7 @@ func TestHeaderTogglePreservesLogsAndCopyCoordinates(t *testing.T) {
 	m.logTail = true
 	before, token, feed := m.panel.Height(), m.logToken, m.logFeed
 	key(m, "z")
-	if m.panel.Height() != before+4 || m.logToken != token || m.logFeed != feed || !m.panel.AtBottom() {
+	if m.panel.Height() != before+1 || m.logToken != token || m.logFeed != feed || !m.panel.AtBottom() {
 		t.Fatal("hiding header did not expand logs while retaining following")
 	}
 	m.panel.GotoTop()
@@ -194,8 +317,8 @@ func TestHeaderTogglePreservesLogsAndCopyCoordinates(t *testing.T) {
 	m.panel.SetContent("EVENTROW\nsecond")
 	before = m.panel.Height()
 	key(m, "z")
-	if m.panel.Height() != before+4 {
-		t.Fatal("events did not gain four rows")
+	if m.panel.Height() != before+1 {
+		t.Fatal("events did not gain the header row")
 	}
 	if got := copiedText(t, dragText(m, textPoint{1, 2}, textPoint{8, 2})); got != "EVENTROW" {
 		t.Fatalf("headerless event selection copied %q", got)

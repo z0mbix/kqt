@@ -160,7 +160,7 @@ func TestStatusViewHidesSecretsSanitizesTextAndFitsTerminal(t *testing.T) {
 	for _, size := range [][2]int{{40, 12}, {80, 24}, {180, 48}} {
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		lines := strings.Split(m.View().Content, "\n")
-		if strings.Contains(m.View().Content, "¤") || m.panel.Width() != size[0]-2 || m.panel.Height() != size[1]-9 {
+		if strings.Contains(m.View().Content, "¤") || m.panel.Width() != size[0]-2 || m.panel.Height() != size[1]-6 {
 			t.Fatal("the status view did not replace the underlying main pane")
 		}
 		if len(lines) != size[1] {

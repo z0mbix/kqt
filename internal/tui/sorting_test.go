@@ -241,10 +241,11 @@ func TestMouseIgnoresBordersModalsAndReleaseButSelectsRowsAndPanes(t *testing.T)
 	m.selectLayout("inspector")
 	m.Update(tea.WindowSizeMsg{Width: 180, Height: 48})
 	before := m.descending
-	for _, v := range []tea.MouseClickMsg{{X: 0, Y: 5, Button: tea.MouseLeft}, {X: 3, Y: 4, Button: tea.MouseLeft}, {X: 3, Y: 5, Button: tea.MouseRight}, {X: 3, Y: 5, Button: tea.MouseLeft, Mod: tea.ModShift}, {X: -1, Y: 5, Button: tea.MouseLeft}} {
+	y := m.tableBounds().y
+	for _, v := range []tea.MouseClickMsg{{X: 0, Y: y + 1, Button: tea.MouseLeft}, {X: 3, Y: y, Button: tea.MouseLeft}, {X: 3, Y: y + 1, Button: tea.MouseRight}, {X: 3, Y: y + 1, Button: tea.MouseLeft, Mod: tea.ModShift}, {X: -1, Y: y + 1, Button: tea.MouseLeft}} {
 		m.Update(v)
 	}
-	m.Update(tea.MouseReleaseMsg{X: 3, Y: 5, Button: tea.MouseLeft})
+	m.Update(tea.MouseReleaseMsg{X: 3, Y: y + 1, Button: tea.MouseLeft})
 	if m.descending != before {
 		t.Fatal("non-header click reversed sorting")
 	}
@@ -260,7 +261,7 @@ func TestMouseIgnoresBordersModalsAndReleaseButSelectsRowsAndPanes(t *testing.T)
 		t.Fatal("click reached table behind modal")
 	}
 	key(m, "esc")
-	m.Update(tea.MouseClickMsg{X: 3, Y: 8, Button: tea.MouseLeft})
+	m.Update(tea.MouseClickMsg{X: 3, Y: y + 4, Button: tea.MouseLeft})
 	if m.selected != 2 {
 		t.Fatal("row click selected wrong row")
 	}

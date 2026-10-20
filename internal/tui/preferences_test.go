@@ -158,14 +158,14 @@ func TestCompletionFuzzySearchAndStableConnectionHeader(t *testing.T) {
 	m.filter = ""
 	m.rebuild("")
 	m.busy = true
-	line := strings.Split(ansi.Strip(m.View().Content), "\n")[2]
+	line := strings.Split(ansi.Strip(m.View().Content), "\n")[0]
 	if strings.Contains(line, "loading") || !strings.Contains(line, "connected") {
 		t.Fatalf("background refresh flickers: %s", line)
 	}
 	m.busy = false
 	m.lastRefresh = time.Time{}
 	m.busy = true
-	line = strings.Split(ansi.Strip(m.View().Content), "\n")[2]
+	line = strings.Split(ansi.Strip(m.View().Content), "\n")[0]
 	if !strings.Contains(line, "loading") {
 		t.Fatal("initial loading state disappeared")
 	}
@@ -186,16 +186,16 @@ func TestThemeNameExpiresAndPreviewDoesNotPersist(t *testing.T) {
 		t.Fatal("theme timeout is not ten seconds")
 	}
 	token := m.themeTimer
-	line := strings.Split(ansi.Strip(m.View().Content), "\n")[2]
+	line := strings.Split(ansi.Strip(m.View().Content), "\n")[0]
 	if !strings.Contains(line, "nord") {
-		t.Fatal("new theme not announced")
+		t.Fatalf("new theme not announced: %s", line)
 	}
 	m.Update(themeHiddenMsg{token - 1})
 	if m.themeUntil.IsZero() {
 		t.Fatal("old timer hid a new theme")
 	}
 	m.Update(themeHiddenMsg{token})
-	line = strings.Split(ansi.Strip(m.View().Content), "\n")[2]
+	line = strings.Split(ansi.Strip(m.View().Content), "\n")[0]
 	if strings.Contains(line, "nord") {
 		t.Fatal("expired theme still displayed")
 	}

@@ -96,7 +96,7 @@ def check_restart(config, width, height, env, wrapper):
             deadline=time.monotonic()+11
             while time.monotonic()<deadline:
                 pump(0.3)
-                line=screen(raw,width,height).splitlines()[2]
+                line=screen(raw,width,height).splitlines()[0]
                 assert 'connected' in line and 'loading' not in line, 'refresh flickered'
             assert 'nord' not in line, 'theme announcement did not expire'
         os.write(master,b'q')
@@ -204,20 +204,20 @@ sys.exit(code)
             assert has_text_colour(bytes(raw), b'j/k', (203, 166, 247)), 'shortcut key did not use theme accent'
             assert has_text_colour(bytes(raw), b': move', (166, 173, 200)), 'shortcut description did not retain muted colour'
             # SGR mouse press/release: a release must not toggle order again.
-            header = screen(raw, width, height).splitlines()[5]
+            header = screen(raw, width, height).splitlines()[2]
             column_x = header.index('NAME') + 1
-            send(f'\x1b[<0;{column_x};6M\x1b[<0;{column_x};6m'.encode())
-            assert 'NAME ↓' in screen(raw, width, height).splitlines()[5], 'header click did not sort descending'
+            send(f'\x1b[<0;{column_x};3M\x1b[<0;{column_x};3m'.encode())
+            assert 'NAME ↓' in screen(raw, width, height).splitlines()[2], 'header click did not sort descending'
             send(b'R')
-            assert 'NAME ↑' in screen(raw, width, height).splitlines()[5], 'R did not reverse'
+            assert 'NAME ↑' in screen(raw, width, height).splitlines()[2], 'R did not reverse'
             send(b'O')
-            assert 'READY ↑' in screen(raw, width, height).splitlines()[5], 'O did not cycle to the next column'
+            assert 'READY ↑' in screen(raw, width, height).splitlines()[2], 'O did not cycle to the next column'
             send(b'\x1b[1;2C') # Shift+Right sorts next visible column.
-            assert 'STATUS ↑' in screen(raw, width, height).splitlines()[5], 'keyboard column sort failed'
+            assert 'STATUS ↑' in screen(raw, width, height).splitlines()[2], 'keyboard column sort failed'
             send(b'\x1b[1;2D'); send(b'\x1b[1;2D')
-            assert 'NAME ↑' in screen(raw, width, height).splitlines()[5], 'keyboard name sort failed'
+            assert 'NAME ↑' in screen(raw, width, height).splitlines()[2], 'keyboard name sort failed'
             send(b':sort\r'); expect('Sort'); send(b'restarts\r')
-            assert 'RESTARTS' in screen(raw, width, height).splitlines()[5], 'sort picker failed'
+            assert 'RESTARTS' in screen(raw, width, height).splitlines()[2], 'sort picker failed'
             send(b':sort name asc\r')
             assert b'\x1b[?1002h' in raw, 'mouse reporting was not enabled'
             if args.kubeconfig:

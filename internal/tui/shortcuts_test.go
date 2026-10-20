@@ -35,7 +35,7 @@ func TestShortcutColoursFollowThemeWithoutChangingGeometry(t *testing.T) {
 			}
 			m.mode = ""
 			help := m.footerHelp(dimensions{})
-			if !strings.HasPrefix(ansi.Strip(help), " j/k: move  [ / ]: sort column") ||
+			if !strings.HasPrefix(ansi.Strip(help), " Explorer · e: edit  j/k: move  [ / ]: sort column") ||
 				!strings.Contains(help, palette.style("accent").Bold(true).Render("j/k")) ||
 				!strings.Contains(help, palette.style("muted").Render(": move")) {
 				t.Fatal("footer lost its key/description colours")

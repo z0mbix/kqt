@@ -216,16 +216,16 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             assert 'tail_lines:' not in config.read_text(), 'reset did not restore original per-mode defaults'
             send('w'); send('s'); send('f'); send('\x1b')
             send('L'); expect('Containers'); send('\r'); expect('follow off')
-            assert '· wrap' not in screen(raw,width,height,resize_events).splitlines()[4], 'wrapping default was not restored on reopening'
+            assert '· wrap' not in screen(raw,width,height,resize_events).splitlines()[1], 'wrapping default was not restored on reopening'
             send('\x1b')
         elif args.feature=='logs-controls':
             send('L'); expect('Containers'); send('\r'); expect('live heartbeat')
             send('s'); expect('follow off')
             send('w')
-            title=screen(raw,width,height,resize_events).splitlines()[4]
+            title=screen(raw,width,height,resize_events).splitlines()[1]
             assert '· wrap' not in title, 'w did not disable log wrapping'
             send('w')
-            assert '· wrap' in screen(raw,width,height,resize_events).splitlines()[4], 'w did not enable wrapping'
+            assert '· wrap' in screen(raw,width,height,resize_events).splitlines()[1], 'w did not enable wrapping'
             send('f'); pump(0.2)
             send('c'); expect('Containers'); send('\x1b'); pump(0.2)
             current=screen(raw,width,height,resize_events)
@@ -353,6 +353,32 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
                 send(':deploy\r'); expect('live')
                 send(':scale 2\r'); expect('Confirm scale'); send('default/web\r'); expect('scale requested')
                 send(':pods\r'); expect('live'); send(':nodes\r'); expect('nodes [3]'); expect('live')
+        elif args.feature=='wide':
+            assert not args.kubeconfig, 'wide PTY workflow uses the labelled demo nodes'
+            send(':nodes\r'); expect('nodes [3]'); send('w'); expect('LABELS')
+            for width in [80,240,320]:
+                resize_events.append((len(raw),width,height))
+                fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
+                os.killpg(process.pid,signal.SIGWINCH); pump(0.3)
+                current=screen(raw,width,height,resize_events)
+                rows=current.splitlines()
+                assert 'kubernetes.io/arch=arm64, kubernetes.io/hostname=' in current or width==80, 'wide labels lost comma spacing'
+                if width==80:
+                    send('l'); current=screen(raw,width,height,resize_events)
+                    assert 'scroll' in current.splitlines()[1], 'narrow wide table lost horizontal scrolling'
+                else:
+                    assert 'standard-4' in rows[3], 'labels still truncate at the old 64-character cap'
+                    assert 'scroll' not in rows[1], 'resize retained a horizontal offset despite spare space'
+                    x=rows[2].index('LABELS')+1
+                    send(f'\x1b[<0;{x};3M\x1b[<0;{x};3m')
+                    assert 'LABELS ↑' in screen(raw,width,height,resize_events).splitlines()[2], 'expanded label header click sorted the wrong column'
+                    send(':sort name asc\r')
+                if width==320:
+                    assert 'topology.kubernetes.io/zone=eu-west-2a' in rows[3], 'full labels are not shown when they fit'
+            send(':theme no-color\r'); expect('LABELS')
+            send(':theme accessible-light\r'); expect('LABELS')
+            send('w')
+            assert 'LABELS' not in screen(raw,width,height,resize_events), 'wide toggle left the extra columns behind'
         elif args.feature=='header':
             assert not args.kubeconfig, 'header PTY workflow uses the demo backend'
             for width,height,layout in [(80,24,'classic'),(180,48,'inspector'),(80,40,'bottom')]:
@@ -360,6 +386,13 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
                 fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
                 os.killpg(process.pid,signal.SIGWINCH); pump(0.3)
                 send(':layout '+layout+'\r'); expect('Context:')
+                rows=screen(raw,width,height,resize_events).splitlines()
+                assert rows[1].startswith('╭') and 'pods [' in rows[1], 'resource frame is not directly below the compact header'
+                assert 'Context: demo' in rows[0] and 'connected' in rows[0], 'compact header lost context or connection state'
+                assert 'Explorer' not in rows[0] and 'https://' not in rows[0], 'redundant header details remain'
+                assert rows[-1].startswith(' Explorer · e: edit'), 'explorer help did not move to the footer'
+                title='kqt · A Kubernetes Query Tool · DEMO ' if width>=120 else 'kqt · DEMO '
+                assert rows[0].endswith(title), 'application title is not right-aligned'
                 send('z'); expect('Header hidden')
                 current=screen(raw,width,height,resize_events)
                 assert current.splitlines()[0].startswith('╭') and 'Context:' not in current, 'hidden header left a gap'
@@ -401,7 +434,7 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             def expect_selected(index):
                 current=screen(raw,width,height,resize_events)
                 assert re.search(r'›\s+web-7c9f6d8b5-'+f'{index:04d}',current), 'wrong selected row:\n'+current
-            for width,height,layout,page in [(80,12,'classic',3),(80,24,'bottom',8)]:
+            for width,height,layout,page in [(80,12,'classic',6),(80,24,'bottom',11)]:
                 resize_events.append((len(raw),width,height))
                 fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
                 os.killpg(process.pid,signal.SIGWINCH); pump(0.3)
@@ -434,13 +467,13 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
                     def inspector_title_row():
                         current=screen(raw,width,height,resize_events)
                         return next(i for i,line in enumerate(current.splitlines()) if 'Inspector · YAML' in line)
-                    assert inspector_title_row()==4, 'right preview is not beside the list'
+                    assert inspector_title_row()==1, 'right preview is not beside the list'
                     send('\x1b[B')
-                    assert inspector_title_row()>4, 'arrow did not preview bottom placement'
+                    assert inspector_title_row()>1, 'arrow did not preview bottom placement'
                     send('\x1b[A')
-                    assert inspector_title_row()==4, 'arrow did not preview right placement'
+                    assert inspector_title_row()==1, 'arrow did not preview right placement'
                     send(f'\x1b[<65;{width//2};{height//2}M')
-                    assert inspector_title_row()>4, 'wheel did not preview bottom placement'
+                    assert inspector_title_row()>1, 'wheel did not preview bottom placement'
                 assert config.read_text()==before_preview, 'preview changed the config'
                 send('\x1b')
                 assert 'Inspector · YAML' not in screen(raw,width,height,resize_events), 'cancel left a preview visible'
