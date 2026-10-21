@@ -162,8 +162,8 @@ func (m *model) eventPulse(v eventPulseMsg) tea.Cmd {
 
 func (m *model) syncEventTable() {
 	key := ""
-	if o, ok := m.current(); ok {
-		key = kube.Identity(o)
+	if selected := m.selectedKey(); selected != "" {
+		key = selected
 	}
 	m.rows = m.eventStore.objects()
 	m.eventRemoved = make(map[string]bool)

@@ -84,7 +84,7 @@ func (m *model) startResourceWatch() tea.Cmd {
 	for _, o := range m.rows {
 		m.resourceCache[kube.Identity(o)] = o
 	}
-	q := kube.Query{Resource: m.route.resource, Namespace: m.route.namespace, Labels: m.route.labels, Fields: m.route.fields}
+	q := kube.Query{Resource: m.route.resource, Namespace: m.route.namespace, Labels: m.route.labels, Fields: m.route.fields, ResourceVersion: m.rowsVersion, Table: m.rowsTable}
 	go func() {
 		f.err = watcher.FollowResources(ctx, q, func(change kube.EventUpdate) {
 			if change.Type != "" {
@@ -117,6 +117,7 @@ func (m *model) resourceBatch(v resourceBatchMsg) tea.Cmd {
 	for _, update := range v.changes {
 		if update.Reset {
 			m.resourceStaging = map[string]unstructured.Unstructured{}
+			m.staleDetails()
 		}
 		if update.State != "" {
 			m.resourceWatchState = update.State
@@ -131,6 +132,7 @@ func (m *model) resourceBatch(v resourceBatchMsg) tea.Cmd {
 		if update.Type != "" && update.Type != watch.Bookmark {
 			key := kube.Identity(update.Object)
 			m.hideChangedSecret(update.Object)
+			m.staleDetail(key)
 			if update.Type == watch.Deleted {
 				delete(cache, key)
 			} else {
@@ -152,8 +154,8 @@ func (m *model) resourceBatch(v resourceBatchMsg) tea.Cmd {
 	}
 	if changed {
 		key := m.route.selection
-		if o, ok := m.current(); ok {
-			key = kube.Identity(o)
+		if selected := m.selectedKey(); selected != "" {
+			key = selected
 		}
 		m.rows = nil
 		for _, o := range m.resourceCache {
@@ -211,8 +213,8 @@ func (m *model) resourceMetricsReady(v resourceMetricsMsg) tea.Cmd {
 		m.metricsWarning = "Metrics API is available; waiting for samples"
 	}
 	key := ""
-	if o, ok := m.current(); ok {
-		key = kube.Identity(o)
+	if selected := m.selectedKey(); selected != "" {
+		key = selected
 	}
 	m.rebuild(key)
 	return m.poll()

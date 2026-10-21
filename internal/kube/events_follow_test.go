@@ -46,6 +46,9 @@ func TestFollowEventsCheckpointsPaginationScopeExpiryAndCancellation(t *testing.
 			closed := make(chan struct{})
 			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == "/version" {
+					return
+				}
 				q := r.URL.Query()
 				if r.Method != "GET" || r.URL.Path != "/api/v1/namespaces/apps/events" || q.Get("fieldSelector") != "involvedObject.uid=pod-uid" || q.Get("labelSelector") != "app=web" {
 					t.Errorf("wrong scoped request: %s %s", r.Method, r.URL)
@@ -55,7 +58,7 @@ func TestFollowEventsCheckpointsPaginationScopeExpiryAndCancellation(t *testing.
 					lists++
 					n := lists
 					mu.Unlock()
-					if q.Get("limit") != "500" {
+					if q.Get("limit") != "1000" {
 						t.Error("list was not paginated")
 					}
 					switch n {

@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/z0mbix/kqt/internal/kube"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
@@ -137,6 +138,9 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 			m.mode = ""
 			m.input.Blur()
 			if mode == "command" {
+				if m.awaitingDetail() && objectCommand(value) {
+					return m.afterDetail(func() tea.Cmd { return m.executeSubmittedCommand(value) })
+				}
 				return m.executeSubmittedCommand(value)
 			}
 			return nil
@@ -361,6 +365,9 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 			return cmd
 		}
 	}
+	if m.awaitingDetail() && !tableNavigationKey(k) && !(m.inspectorFocused && slices.Contains([]string{"J", "y"}, k)) && !(k == "enter" && slices.Contains([]string{"Namespace", "Node"}, m.visible[m.selected].GetKind())) {
+		return m.afterDetail(func() tea.Cmd { return m.key(msg) })
+	}
 	if k == "x" {
 		if o, ok := m.current(); ok && (o.GetKind() == "Pod" || o.GetKind() == "Service") {
 			m.stopResourceForwards()
@@ -528,22 +535,29 @@ func (m *model) drillDown() tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if target, ok := m.drillTarget(o); ok {
+		if o.GetKind() == "Namespace" {
+			m.options.AllNamespaces = false
+			m.options.Namespace = o.GetName()
+		}
+		return m.navigate(target, true)
+	}
+	m.openDetails(false, false)
+	return nil
+}
+func (m *model) drillTarget(o unstructured.Unstructured) (route, bool) {
+	r, _ := kube.Resolve(m.resources, "pods")
 	if o.GetKind() == "Namespace" {
-		m.options.AllNamespaces = false
-		m.options.Namespace = o.GetName()
-		r, _ := kube.Resolve(m.resources, "pods")
-		return m.navigate(route{resource: r, namespace: o.GetName()}, true)
+		return route{resource: r, namespace: o.GetName()}, true
 	}
 	if selector, fields, ok := kube.PodSelector(o); ok {
-		r, _ := kube.Resolve(m.resources, "pods")
 		ns := o.GetNamespace()
 		if o.GetKind() == "Node" {
 			ns = ""
 		}
-		return m.navigate(route{resource: r, namespace: ns, labels: selector, fields: fields}, true)
+		return route{resource: r, namespace: ns, labels: selector, fields: fields}, true
 	}
-	m.openDetails(false, false)
-	return nil
+	return route{}, false
 }
 func (m *model) openDetails(manifest, asJSON bool) {
 	_, ok := m.current()

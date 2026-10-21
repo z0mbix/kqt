@@ -42,7 +42,7 @@ func TestClientKubernetesHTTPContract(t *testing.T) {
 			fmt.Fprint(w, `{"kind":"APIResourceList","groupVersion":"demo.kqt.dev/v1","resources":[{"name":"widgets","kind":"Widget","namespaced":true,"verbs":["list"],"shortNames":["wdg"]}]}`)
 		case "/api/v1/namespaces/apps/pods":
 			q := r.URL.Query()
-			if q.Get("labelSelector") != "app=web" || q.Get("fieldSelector") != "spec.nodeName=worker" || q.Get("limit") != "500" {
+			if q.Get("labelSelector") != "app=web" || q.Get("fieldSelector") != "spec.nodeName=worker" || q.Get("limit") != "1000" {
 				t.Errorf("wrong list options: %s", r.URL)
 			}
 			name, next := "one", "page2"
@@ -267,5 +267,57 @@ func TestClientEditGetAndVersionedMergePatch(t *testing.T) {
 	}
 	if gotPatch == nil || gotPatch["metadata"].(map[string]any)["resourceVersion"] != "7" {
 		t.Fatal("patch lost version precondition")
+	}
+}
+
+func TestListVersionReportsConsistentSnapshot(t *testing.T) {
+	versions := map[string]string{"": "10", "page2": "10"}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		next := "page2"
+		if r.URL.Query().Get("continue") == "page2" {
+			next = ""
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"apiVersion": "v1", "kind": "PodList", "metadata": map[string]interface{}{"resourceVersion": versions[r.URL.Query().Get("continue")], "continue": next}, "items": []interface{}{}})
+	}))
+	defer server.Close()
+	c, err := NewClient(&rest.Config{Host: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	r, _ := Resolve(Builtins(), "pods")
+	if _, version, err := c.ListVersion(context.Background(), Query{Resource: r, Namespace: "apps"}); err != nil || version != "10" {
+		t.Fatalf("version=%q err=%v", version, err)
+	}
+	versions["page2"] = "11"
+	if _, version, err := c.ListVersion(context.Background(), Query{Resource: r, Namespace: "apps"}); err != nil || version != "" {
+		t.Fatalf("inconsistent pages reported version %q err=%v", version, err)
+	}
+}
+
+func TestMetricsDenialIsRemembered(t *testing.T) {
+	var calls sync.Map
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count, _ := calls.LoadOrStore(r.URL.Path, new(int))
+		*count.(*int)++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(403)
+		fmt.Fprint(w, `{"apiVersion":"v1","kind":"Status","status":"Failure","reason":"Forbidden","code":403}`)
+	}))
+	defer server.Close()
+	c, err := NewClient(&rest.Config{Host: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for range 3 {
+		if _, err := c.Metrics(context.Background(), "Pod", "apps"); err == nil {
+			t.Fatal("metrics denial was hidden")
+		}
+	}
+	count, _ := calls.Load("/apis/metrics.k8s.io/v1/namespaces/apps/pods")
+	if count == nil || *count.(*int) != 1 {
+		t.Fatalf("denied metrics were requested again: %v", count)
 	}
 }

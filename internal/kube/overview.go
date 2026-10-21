@@ -35,7 +35,7 @@ func ReadOverview(ctx context.Context, b Backend, namespace string) Overview {
 				return
 			}
 			defer func() { <-slots }()
-			request, cancel := context.WithTimeout(ctx, 8*time.Second)
+			request, cancel := context.WithTimeout(ctx, 45*time.Second)
 			defer cancel()
 			work(request)
 		}()
@@ -47,7 +47,11 @@ func ReadOverview(ctx context.Context, b Backend, namespace string) Overview {
 			if !r.Namespaced {
 				ns = ""
 			}
-			objects, err := b.List(request, Query{Resource: r, Namespace: ns})
+			q := Query{Resource: r, Namespace: ns}
+			if name == "events" {
+				q.Fields = "type=Warning"
+			}
+			objects, err := b.List(request, q)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {

@@ -217,8 +217,9 @@ func followSource(ctx context.Context, b Backend, stream LogStreamer, source log
 	var last *time.Time
 	repeats := 0
 	previousError := ""
+	verified := true
 	for ctx.Err() == nil {
-		if reader, ok := b.(Editable); ok {
+		if reader, ok := b.(Editable); ok && !verified {
 			resource, _ := Resolve(Builtins(), "pods")
 			request, cancel := context.WithTimeout(ctx, 15*time.Second)
 			pod, err := reader.Get(request, resource, source.ns, source.pod)
@@ -240,6 +241,7 @@ func followSource(ctx context.Context, b Backend, stream LogStreamer, source log
 				continue
 			}
 		}
+		verified = false
 		reader, err := stream.StreamLogs(ctx, source.ns, source.pod, source.container, last, options)
 		if err == nil {
 			for _, ready := range opened {

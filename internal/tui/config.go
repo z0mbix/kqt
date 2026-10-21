@@ -53,6 +53,7 @@ type config struct {
 	Debug             debugConfig              `toml:"debug,omitempty" yaml:"debug,omitempty"`
 	CommandHistory    []string                 `toml:"command_history,omitempty" yaml:"command_history,omitempty"`
 	ReadOnly          bool                     `toml:"read_only,omitempty" yaml:"read_only,omitempty"`
+	FullObjectLists   bool                     `toml:"full_object_lists,omitempty" yaml:"full_object_lists,omitempty"`
 	Views             map[string]viewConfig    `toml:"views,omitempty" yaml:"views,omitempty"`
 	Layouts           map[string]layoutProfile `toml:"layouts,omitempty" yaml:"layouts,omitempty"`
 	Contexts          map[string]contextState  `toml:"contexts,omitempty" yaml:"contexts,omitempty"`
@@ -316,6 +317,7 @@ inspector_format: yaml
 # header_visible: true # z toggles the explorer header
 refresh_interval: 2s
 # read_only: true # disables resource changes and shells
+# full_object_lists: true # list complete objects instead of server-side tables; slower on high-latency links
 # editor: "code --wait" # default: $EDITOR, then $VISUAL, then vi
 # shell: "/bin/sh" # command inside the selected running container
 # download_dir: "~/Downloads/kqt" # default: current directory

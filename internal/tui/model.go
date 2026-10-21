@@ -71,6 +71,12 @@ type connectedMsg struct {
 	resources                  []kube.Resource
 	server, namespace, warning string
 	err                        error
+	prefetch                   *prefetchedSnapshot
+}
+type prefetchedSnapshot struct {
+	route    route
+	table    kube.TableMode
+	snapshot snapshotMsg
 }
 type snapshotMsg struct {
 	generation, request uint64
@@ -78,6 +84,8 @@ type snapshotMsg struct {
 	err                 error
 	usage               map[string]kube.Usage
 	metricsError        string
+	version             string
+	table               kube.TableMode
 }
 type pollMsg struct{ generation, request uint64 }
 type themeHiddenMsg struct{ token uint64 }
@@ -115,6 +123,18 @@ type model struct {
 	resourceFeed                             *resourceFeed
 	resourceCache, resourceStaging           map[string]unstructured.Unstructured
 	resourceWatchState, resourceWatchError   string
+	rowsVersion                              string
+	rowsTable                                kube.TableMode
+	details                                  map[string]unstructured.Unstructured
+	detailStale                              map[string]bool
+	detailErrors                             map[string]string
+	detailLoading, detailDue, detailPending  string
+	detailToken                              uint64
+	prefetchLoading, viewDue, viewLoading    string
+	prefetchFailed                           map[string]bool
+	viewCache                                map[string]cachedView
+	detailAction                             func() tea.Cmd
+	requestedTable                           kube.TableMode
 	actionToken                              uint64
 	actionCancel                             context.CancelFunc
 	actionPlan                               *kube.ActionPlan
@@ -236,6 +256,8 @@ func newModel(ctx context.Context, s *Settings, o Options, l *kube.Loader) (*mod
 	}
 	m := &model{ctx: ctx, settings: s, options: o, loader: l, resources: kube.Builtins(), theme: s.Themes[s.Config.Theme], layout: s.Config.Layout, width: 80, height: 24, sortColumn: "name"}
 	m.inspectorFormat = s.Config.InspectorFormat
+	m.clearDetails()
+	m.clearViewCache()
 	m.logWrap = s.Config.Logs.Wrap
 	m.themeUntil, m.themeTimer = time.Now().Add(10*time.Second), 1
 	m.panel = viewport.New(viewport.WithWidth(74), viewport.WithHeight(16))
@@ -340,6 +362,8 @@ func (m *model) connect(name string) tea.Cmd {
 	m.busy = true
 	m.backend = nil
 	m.resources = kube.Builtins()
+	m.clearDetails()
+	m.clearViewCache()
 	m.rows = nil
 	m.visible = nil
 	m.history = nil
@@ -379,6 +403,10 @@ func (m *model) connect(name string) tea.Cmd {
 	m.updateInspector()
 	m.session = newSession(m.ctx)
 	s, g, demo, loader := m.session, m.generation, m.options.Demo, m.loader
+	early, allNamespaces := m.route, m.options.AllNamespaces
+	prefetch := early.resource.ID() != "" && early.resource.Kind != "Event"
+	metrics := prefetch && m.hasMetrics() && (early.resource.Kind == "Pod" || early.resource.Kind == "Node")
+	table := m.tableMode(early)
 	return func() tea.Msg {
 		var b kube.Backend
 		var server, ns string
@@ -394,6 +422,21 @@ func (m *model) connect(name string) tea.Cmd {
 		if err != nil {
 			return connectedMsg{generation: g, err: err}
 		}
+		if lister, ok := b.(kube.TableLister); !ok || !lister.ServerTables() {
+			table = kube.TableOff
+		}
+		var snapshot chan snapshotMsg
+		if prefetch {
+			if early.namespace == "" && !allNamespaces {
+				early.namespace = ns
+			}
+			snapshot = make(chan snapshotMsg, 1)
+			go func() {
+				ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
+				defer cancel()
+				snapshot <- loadSnapshot(ctx, b, early, metrics, table)
+			}()
+		}
 		resources, discoveryErr := b.Resources(s.ctx)
 		warning := ""
 		if discoveryErr != nil {
@@ -402,7 +445,11 @@ func (m *model) connect(name string) tea.Cmd {
 		if resources == nil {
 			resources = kube.Builtins()
 		}
-		return connectedMsg{g, b, resources, server, ns, warning, nil}
+		message := connectedMsg{g, b, resources, server, ns, warning, nil, nil}
+		if snapshot != nil {
+			message.prefetch = &prefetchedSnapshot{early, table, <-snapshot}
+		}
+		return message
 	}
 }
 func (m *model) fetch() tea.Cmd {
@@ -418,38 +465,53 @@ func (m *model) fetch() tea.Cmd {
 	m.busy = true
 	m.request++
 	g, id, b, r := m.generation, m.request, m.backend, m.route
-	ctx, cancel := context.WithTimeout(m.session.ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(m.session.ctx, time.Minute)
 	m.requestCancel = cancel
 	metrics := m.hasMetrics() && (r.resource.Kind == "Pod" || r.resource.Kind == "Node")
+	table := m.tableMode(r)
+	m.requestedTable = table
 	return func() tea.Msg {
 		defer cancel()
-		var usage map[string]kube.Usage
-		var metricsError string
-		var tasks sync.WaitGroup
-		if metrics {
-			tasks.Add(1)
-			go func() {
-				defer tasks.Done()
-				if reader, ok := b.(kube.MetricsReader); ok {
-					var err error
-					metricsContext, done := context.WithTimeout(ctx, 3*time.Second)
-					defer done()
-					usage, err = reader.Metrics(metricsContext, r.resource.Kind, r.namespace)
-					if err != nil {
-						metricsError = kube.Safe(err.Error())
-					}
-				} else {
-					metricsError = "Metrics API unavailable"
-				}
-			}()
-		}
-		rows, err := b.List(ctx, kube.Query{Resource: r.resource, Namespace: r.namespace, Labels: r.labels, Fields: r.fields})
-		tasks.Wait()
-		if metrics && len(rows) > 0 && len(usage) == 0 && metricsError == "" {
-			metricsError = "Metrics API is available; waiting for samples"
-		}
-		return snapshotMsg{generation: g, request: id, rows: rows, err: err, usage: usage, metricsError: metricsError}
+		v := loadSnapshot(ctx, b, r, metrics, table)
+		v.generation, v.request = g, id
+		return v
 	}
+}
+func loadSnapshot(ctx context.Context, b kube.Backend, r route, metrics bool, table kube.TableMode) snapshotMsg {
+	var usage map[string]kube.Usage
+	var metricsError string
+	var tasks sync.WaitGroup
+	if metrics {
+		tasks.Add(1)
+		go func() {
+			defer tasks.Done()
+			if reader, ok := b.(kube.MetricsReader); ok {
+				var err error
+				metricsContext, done := context.WithTimeout(ctx, 3*time.Second)
+				defer done()
+				usage, err = reader.Metrics(metricsContext, r.resource.Kind, r.namespace)
+				if err != nil {
+					metricsError = kube.Safe(err.Error())
+				}
+			} else {
+				metricsError = "Metrics API unavailable"
+			}
+		}()
+	}
+	q := kube.Query{Resource: r.resource, Namespace: r.namespace, Labels: r.labels, Fields: r.fields, Table: table}
+	var rows []unstructured.Unstructured
+	var version string
+	var err error
+	if lister, ok := b.(kube.VersionedLister); ok {
+		rows, version, err = lister.ListVersion(ctx, q)
+	} else {
+		rows, err = b.List(ctx, q)
+	}
+	tasks.Wait()
+	if metrics && len(rows) > 0 && len(usage) == 0 && metricsError == "" {
+		metricsError = "Metrics API is available; waiting for samples"
+	}
+	return snapshotMsg{rows: rows, err: err, usage: usage, metricsError: metricsError, version: version, table: table}
 }
 func (m *model) poll() tea.Cmd {
 	g, id := m.generation, m.request
@@ -474,8 +536,8 @@ func (m *model) navigate(r route, remember bool) tea.Cmd {
 	m.cancelRelations()
 	if remember {
 		old := m.route
-		if o, ok := m.current(); ok {
-			old.selection = kube.Identity(o)
+		if selected := m.selectedKey(); selected != "" {
+			old.selection = selected
 		}
 		m.history = append(m.history, old)
 	}
@@ -487,6 +549,7 @@ func (m *model) navigate(r route, remember bool) tea.Cmd {
 	m.closeEvents()
 	m.request++
 	m.busy = false
+	m.clearDetails()
 	m.rows = nil
 	m.visible = nil
 	m.selected = 0
@@ -504,6 +567,9 @@ func (m *model) navigate(r route, remember bool) tea.Cmd {
 	m.applyView()
 	m.updateInspector()
 	m.saveRoute()
+	if cmd := m.cachedSnapshot(); cmd != nil {
+		return cmd
+	}
 	return m.fetch()
 }
 func (m *model) applyView() {
@@ -525,13 +591,19 @@ func (m *model) applyView() {
 	m.orderSelected = m.sortColumn
 }
 func (m *model) columns() []string {
-	v, ok := m.views[m.route.resource.ID()]
+	return m.columnsFor(m.route)
+}
+func (m *model) viewFor(r route) viewConfig {
+	v, ok := m.views[r.resource.ID()]
 	if !ok {
-		v = m.views[m.route.resource.GVR.Resource]
+		v = m.views[r.resource.GVR.Resource]
 	}
-	cols := slices.Clone(v.Columns)
+	return v
+}
+func (m *model) columnsFor(r route) []string {
+	cols := slices.Clone(m.viewFor(r).Columns)
 	if len(cols) == 0 {
-		cols = kube.DefaultColumns(m.route.resource.Kind)
+		cols = kube.DefaultColumns(r.resource.Kind)
 	}
 	if m.wide {
 		for _, c := range []string{"kind", "labels"} {
@@ -540,14 +612,14 @@ func (m *model) columns() []string {
 			}
 		}
 	}
-	if m.metricsEnabled && (m.route.resource.Kind == "Pod" || m.route.resource.Kind == "Node") {
+	if m.metricsEnabled && (r.resource.Kind == "Pod" || r.resource.Kind == "Node") {
 		for _, c := range []string{"cpu", "memory"} {
 			if !slices.Contains(cols, c) {
 				cols = append(cols, c)
 			}
 		}
 	}
-	if m.route.namespace != "" || !m.route.resource.Namespaced {
+	if r.namespace != "" || !r.resource.Namespaced {
 		cols = slices.DeleteFunc(cols, func(c string) bool { return c == "namespace" })
 	}
 	return cols
@@ -556,7 +628,19 @@ func (m *model) current() (unstructured.Unstructured, bool) {
 	if m.selected < 0 || m.selected >= len(m.visible) {
 		return unstructured.Unstructured{}, false
 	}
-	return m.visible[m.selected], true
+	row := m.visible[m.selected]
+	if kube.IsTableRow(row) {
+		if full, ok := m.details[kube.Identity(row)]; ok {
+			return full, true
+		}
+	}
+	return row, true
+}
+func (m *model) selectedKey() string {
+	if m.selected < 0 || m.selected >= len(m.visible) {
+		return ""
+	}
+	return kube.Identity(m.visible[m.selected])
 }
 func (m *model) rebuild(key string) {
 	slices.SortStableFunc(m.rows, func(a, b unstructured.Unstructured) int {
@@ -646,10 +730,13 @@ func (m *model) updateInspector() {
 	}
 	content, key := "No resource selected.", ""
 	if ok {
-		key = kube.Identity(o)
-		content = m.describe(o)
-		if m.inspectorFormat == "json" {
+		key = m.selectedKey()
+		if kube.IsTableRow(o) {
+			content = m.describeLoading(o)
+		} else if m.inspectorFormat == "json" {
 			content = m.theme.renderJSON(m.manifest(o, true))
+		} else {
+			content = m.describe(o)
 		}
 	}
 	if content != m.inspectorContent {
@@ -707,6 +794,10 @@ func (m *model) loadLogs() tea.Cmd {
 	}
 }
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, cmd := m.update(msg)
+	return model, tea.Batch(cmd, m.syncTableRows())
+}
+func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	run := m.historyExecutionFor(msg)
 	defer m.observeCommandResult(run, msg)
 	switch v := msg.(type) {
@@ -738,6 +829,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.rolloutsReady(v)
 	case relationOpenedMsg:
 		return m, m.relationOpened(v)
+	case detailDueMsg:
+		return m, m.detailDueReady(v)
+	case detailMsg:
+		return m, m.detailReady(v)
+	case viewDueMsg:
+		return m, m.viewDueReady(v)
+	case viewPrefetchedMsg:
+		m.viewPrefetched(v)
 	case tea.WindowSizeMsg:
 		m.cancelSelection()
 		m.width = max(1, v.Width)
@@ -774,6 +873,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.route.resource = r
 		m.applyView()
 		m.saveRoute()
+		if p := v.prefetch; p != nil && p.route.resource.GVR == r.GVR && p.route.namespace == m.route.namespace && p.route.labels == m.route.labels && p.route.fields == m.route.fields && p.table == m.tableMode(m.route) {
+			m.busy = true
+			m.request++
+			m.requestedTable = p.table
+			snapshot := p.snapshot
+			snapshot.generation, snapshot.request = m.generation, m.request
+			return m, func() tea.Msg { return snapshot }
+		}
 		return m, m.fetch()
 	case snapshotMsg:
 		if v.generation != m.generation || v.request != m.request {
@@ -785,8 +892,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.failures++
 		} else {
 			key := m.route.selection
-			if o, ok := m.current(); ok {
-				key = kube.Identity(o)
+			if selected := m.selectedKey(); selected != "" {
+				key = selected
 			}
 			m.route.selection = ""
 			m.rows = make([]unstructured.Unstructured, len(v.rows))
@@ -794,6 +901,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.hideChangedSecret(o)
 				m.rows[i] = kube.Redacted(o)
 			}
+			m.rowsVersion, m.rowsTable = v.version, v.table
+			m.staleDetails()
 			m.dataErr = ""
 			m.failures = 0
 			m.lastRefresh = time.Now()

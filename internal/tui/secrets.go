@@ -27,7 +27,7 @@ func (m *model) clearSecret() {
 }
 
 func (m *model) hideChangedSecret(o unstructured.Unstructured) {
-	if m.secretTarget == "" || o.GetKind() != "Secret" || kube.Identity(o) != m.secretTarget {
+	if m.secretTarget == "" || o.GetKind() != "Secret" || o.GetResourceVersion() == "" || kube.Identity(o) != m.secretTarget {
 		return
 	}
 	previous := m.secretObject

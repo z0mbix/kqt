@@ -147,7 +147,7 @@ func (d *Demo) List(ctx context.Context, q Query) ([]unstructured.Unstructured, 
 		if o.GetKind() != q.Resource.Kind || q.Resource.Namespaced && q.Namespace != "" && o.GetNamespace() != q.Namespace || !selector.Matches(labels.Set(o.GetLabels())) {
 			continue
 		}
-		if !fieldSelector.Matches(fields.Set{"metadata.name": o.GetName(), "metadata.namespace": o.GetNamespace(), "spec.nodeName": Text(o, "spec", "nodeName"), "involvedObject.uid": Text(o, "involvedObject", "uid")}) {
+		if !fieldSelector.Matches(fields.Set{"metadata.name": o.GetName(), "metadata.namespace": o.GetNamespace(), "spec.nodeName": Text(o, "spec", "nodeName"), "involvedObject.uid": Text(o, "involvedObject", "uid"), "type": Text(o, "type")}) {
 			continue
 		}
 		result = append(result, *o.DeepCopy())

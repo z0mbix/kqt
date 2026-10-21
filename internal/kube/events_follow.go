@@ -58,8 +58,16 @@ func (c *Client) followObjects(ctx context.Context, q Query, emit func(EventUpda
 	} else {
 		q.Namespace = ""
 	}
-	var version string
-	synced := false
+	page := c.pager(q)
+	open := resource.Watch
+	if q.Table != TableOff {
+		decoder := &tableDecoder{resource: q.Resource, namespace: q.Namespace}
+		open = func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+			return c.tableWatch(ctx, q, options, decoder)
+		}
+	}
+	version := q.ResourceVersion
+	synced := version != ""
 	backoff := 250 * time.Millisecond
 	send := func(update EventUpdate) {
 		if ctx.Err() == nil {
@@ -75,6 +83,9 @@ func (c *Client) followObjects(ctx context.Context, q Query, emit func(EventUpda
 		}
 	}
 	matches := func(o unstructured.Unstructured) bool {
+		if IsTableRow(o) {
+			return q.Namespace == "" || o.GetNamespace() == q.Namespace
+		}
 		if !labelSelector.Matches(labels.Set(o.GetLabels())) {
 			return false
 		}
@@ -108,27 +119,28 @@ func (c *Client) followObjects(ctx context.Context, q Query, emit func(EventUpda
 	for ctx.Err() == nil {
 		if version == "" {
 			send(EventUpdate{State: "listing", Reset: true})
-			request, cancel := context.WithTimeout(ctx, 15*time.Second)
-			options := metav1.ListOptions{Limit: 500, FieldSelector: q.Fields, LabelSelector: q.Labels}
+			request, cancel := context.WithTimeout(ctx, time.Minute)
+			options := metav1.ListOptions{Limit: listPageSize, FieldSelector: q.Fields, LabelSelector: q.Labels}
 			var listVersion string
 			for {
-				var list *unstructured.UnstructuredList
-				list, err = resource.List(request, options)
+				var items []unstructured.Unstructured
+				var pageVersion, next string
+				items, pageVersion, next, err = page(request, options)
 				if err != nil {
 					break
 				}
 				if listVersion == "" {
-					listVersion = list.GetResourceVersion()
-				} else if listVersion != list.GetResourceVersion() {
+					listVersion = pageVersion
+				} else if listVersion != pageVersion {
 					err = fmt.Errorf("resource list changed resource version between pages")
 					break
 				}
-				for _, o := range list.Items {
+				for _, o := range items {
 					if matches(o) {
 						send(EventUpdate{Type: watch.Added, Object: o})
 					}
 				}
-				options.Continue = list.GetContinue()
+				options.Continue = next
 				if options.Continue == "" {
 					break
 				}
@@ -153,9 +165,10 @@ func (c *Client) followObjects(ctx context.Context, q Query, emit func(EventUpda
 			var stream watch.Interface
 			started := time.Now()
 			healthy := false
-			stream, err = resource.Watch(request, metav1.ListOptions{ResourceVersion: version, AllowWatchBookmarks: true, TimeoutSeconds: &timeout, FieldSelector: q.Fields, LabelSelector: q.Labels})
+			stream, err = open(request, metav1.ListOptions{ResourceVersion: version, AllowWatchBookmarks: true, TimeoutSeconds: &timeout, FieldSelector: q.Fields, LabelSelector: q.Labels})
 			handshake.Stop()
 			if err == nil {
+				go c.warm(ctx)
 				send(EventUpdate{State: "live", Synced: synced})
 				err = consumeEventWatch(request, stream, matches, func(update EventUpdate) {
 					healthy = true

@@ -206,8 +206,8 @@ func (m *model) applyLayout(name string) bool {
 		m.views[k] = v
 	}
 	key := ""
-	if o, ok := m.current(); ok {
-		key = kube.Identity(o)
+	if selected := m.selectedKey(); selected != "" {
+		key = selected
 	}
 	m.applyView()
 	m.rebuild(key)

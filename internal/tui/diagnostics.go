@@ -94,8 +94,8 @@ func (m *model) toggleMetrics() tea.Cmd {
 	m.request++
 	m.busy = false
 	key := ""
-	if o, ok := m.current(); ok {
-		key = kube.Identity(o)
+	if selected := m.selectedKey(); selected != "" {
+		key = selected
 	}
 	m.rebuild(key)
 	return m.fetch()

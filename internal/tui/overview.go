@@ -15,6 +15,7 @@ import (
 type overviewMsg struct {
 	generation, token uint64
 	snapshot          kube.Overview
+	elapsed           time.Duration
 }
 type overviewTickMsg struct{ generation, token uint64 }
 
@@ -49,9 +50,11 @@ func (m *model) fetchOverview() tea.Cmd {
 	}
 	g, token, b, ns, parent := m.generation, m.overviewToken, m.backend, m.route.namespace, m.overviewContext
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(parent, 15*time.Second)
+		ctx, cancel := context.WithTimeout(parent, time.Minute)
 		defer cancel()
-		return overviewMsg{g, token, kube.ReadOverview(ctx, b, ns)}
+		started := time.Now()
+		snapshot := kube.ReadOverview(ctx, b, ns)
+		return overviewMsg{g, token, snapshot, time.Since(started)}
 	}
 }
 func (m *model) overviewReady(v overviewMsg) tea.Cmd {
@@ -60,7 +63,7 @@ func (m *model) overviewReady(v overviewMsg) tea.Cmd {
 	}
 	m.overview = v.snapshot
 	m.renderOverview()
-	delay := max(5*time.Second, m.settings.Interval)
+	delay := max(5*time.Second, m.settings.Interval, 2*v.elapsed)
 	return tea.Tick(delay, func(time.Time) tea.Msg { return overviewTickMsg{v.generation, v.token} })
 }
 func (m *model) renderOverview() {

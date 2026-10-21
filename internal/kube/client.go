@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,7 +26,15 @@ import (
 type Query struct {
 	Resource                  Resource
 	Namespace, Labels, Fields string
+	ResourceVersion           string
+	Table                     TableMode
 }
+type VersionedLister interface {
+	ListVersion(context.Context, Query) ([]unstructured.Unstructured, string, error)
+}
+
+const listPageSize = 1000
+
 type Backend interface {
 	Resources(context.Context) ([]Resource, error)
 	List(context.Context, Query) ([]unstructured.Unstructured, error)
@@ -80,7 +89,8 @@ func (l *Loader) Open(name string) (Backend, string, string, error) {
 		return nil, "", "", err
 	}
 	cfg.UserAgent = "kqt/0.1.0"
-	cfg.Timeout = 12 * time.Second
+	cfg.Timeout = time.Minute
+	cfg.QPS, cfg.Burst = 50, 100
 	ns, _, err := config.Namespace()
 	if err != nil {
 		return nil, "", "", err
@@ -96,6 +106,7 @@ type Client struct {
 	config        *rest.Config
 	streamCore    typedcore.CoreV1Interface
 	streamDynamic dynamic.Interface
+	metricsDenied sync.Map
 }
 
 func NewClient(cfg *rest.Config) (*Client, error) {
@@ -126,6 +137,11 @@ func NewClient(cfg *rest.Config) (*Client, error) {
 	return &Client{dynamic: d, core: c, http: h, config: rest.CopyConfig(cfg), streamCore: streamCore, streamDynamic: streamDynamic}, nil
 }
 func (c *Client) Close() { c.http.CloseIdleConnections() }
+func (c *Client) warm(ctx context.Context) {
+	request, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	c.core.RESTClient().Get().AbsPath("/version").Do(request)
+}
 
 type discoveryTransport struct {
 	base http.RoundTripper
@@ -171,16 +187,54 @@ func (c *Client) Resources(ctx context.Context) ([]Resource, error) {
 	return Merge(result), err
 }
 func (c *Client) List(ctx context.Context, q Query) ([]unstructured.Unstructured, error) {
+	result, _, err := c.ListVersion(ctx, q)
+	return result, err
+}
+func (c *Client) ListVersion(ctx context.Context, q Query) ([]unstructured.Unstructured, string, error) {
+	page := c.pager(q)
+	var result []unstructured.Unstructured
+	var version string
+	consistent := true
+	options := metav1.ListOptions{Limit: listPageSize, LabelSelector: q.Labels, FieldSelector: q.Fields}
+	for {
+		items, pageVersion, next, err := page(ctx, options)
+		if err != nil {
+			return nil, "", err
+		}
+		if options.Continue == "" {
+			version = pageVersion
+		} else if version != pageVersion {
+			consistent = false
+		}
+		result = append(result, items...)
+		options.Continue = next
+		if options.Continue == "" {
+			break
+		}
+	}
+	if !consistent {
+		version = ""
+	}
+	return result, version, nil
+}
+
+type listPage func(context.Context, metav1.ListOptions) ([]unstructured.Unstructured, string, string, error)
+
+func (c *Client) pager(q Query) listPage {
+	if q.Table != TableOff {
+		decoder := &tableDecoder{resource: q.Resource, namespace: q.Namespace}
+		return func(ctx context.Context, options metav1.ListOptions) ([]unstructured.Unstructured, string, string, error) {
+			return c.tablePage(ctx, q, options, decoder)
+		}
+	}
 	var client dynamic.ResourceInterface = c.dynamic.Resource(q.Resource.GVR)
 	if q.Resource.Namespaced {
 		client = c.dynamic.Resource(q.Resource.GVR).Namespace(q.Namespace)
 	}
-	var result []unstructured.Unstructured
-	options := metav1.ListOptions{Limit: 500, LabelSelector: q.Labels, FieldSelector: q.Fields}
-	for {
+	return func(ctx context.Context, options metav1.ListOptions) ([]unstructured.Unstructured, string, string, error) {
 		list, err := client.List(ctx, options)
 		if err != nil {
-			return nil, err
+			return nil, "", "", err
 		}
 		for i := range list.Items {
 			if list.Items[i].GetKind() == "" {
@@ -190,13 +244,8 @@ func (c *Client) List(ctx context.Context, q Query) ([]unstructured.Unstructured
 				list.Items[i].SetAPIVersion(q.Resource.GVR.GroupVersion().String())
 			}
 		}
-		result = append(result, list.Items...)
-		options.Continue = list.GetContinue()
-		if options.Continue == "" {
-			break
-		}
+		return list.Items, list.GetResourceVersion(), list.GetContinue(), nil
 	}
-	return result, nil
 }
 func (c *Client) Logs(ctx context.Context, namespace, pod, container string, previous bool, limits ...LogOptions) (string, error) {
 	limit := int64(1024 * 1024)

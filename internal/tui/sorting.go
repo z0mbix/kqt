@@ -76,8 +76,8 @@ func (m *model) setOrder(column string, descending bool) {
 		return
 	}
 	key := ""
-	if object, ok := m.current(); ok {
-		key = kube.Identity(object)
+	if selected := m.selectedKey(); selected != "" {
+		key = selected
 	}
 	m.notice = ""
 	m.sortColumn, m.descending = column, descending

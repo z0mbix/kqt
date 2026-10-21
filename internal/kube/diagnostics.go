@@ -28,6 +28,10 @@ func (c *Client) Metrics(ctx context.Context, kind, namespace string) (map[strin
 	} else if kind != "Pod" {
 		return nil, fmt.Errorf("metrics are available for pods and nodes")
 	}
+	key := kind + "/" + namespace
+	if denied, ok := c.metricsDenied.Load(key); ok {
+		return nil, denied.(error)
+	}
 	var objects []unstructured.Unstructured
 	var err error
 	for _, version := range []string{"v1", "v1beta1"} {
@@ -37,7 +41,11 @@ func (c *Client) Metrics(ctx context.Context, kind, namespace string) (map[strin
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Metrics API unavailable: %w", err)
+		err = fmt.Errorf("Metrics API unavailable: %w", err)
+		if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
+			c.metricsDenied.Store(key, err)
+		}
+		return nil, err
 	}
 	result := map[string]Usage{}
 	for _, object := range objects {

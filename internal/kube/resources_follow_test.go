@@ -22,6 +22,9 @@ func TestGenericResourceWatchScopeChangesExpiryAndCancellation(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/version" {
+			return
+		}
 		if r.URL.Path != "/api/v1/namespaces/apps/pods" || r.URL.Query().Get("labelSelector") != "app=web" {
 			t.Errorf("watch scope lost: %s", r.URL)
 		}
@@ -103,5 +106,56 @@ func TestGenericClusterScopedWatchUsesRootAPI(t *testing.T) {
 	r, _ := Resolve(Builtins(), "nodes")
 	if e := c.FollowResources(context.Background(), Query{Resource: r, Namespace: "ignored"}, func(EventUpdate) {}); e == nil {
 		t.Fatal("watch permission denial was hidden")
+	}
+}
+func TestGenericResourceWatchResumesFromCallerList(t *testing.T) {
+	var lists, warms atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/version" {
+			warms.Add(1)
+			fmt.Fprint(w, `{"major":"1","minor":"36"}`)
+			return
+		}
+		if r.URL.Query().Get("watch") != "true" {
+			lists.Add(1)
+			fmt.Fprint(w, `{"apiVersion":"v1","kind":"PodList","metadata":{"resourceVersion":"99"},"items":[]}`)
+			return
+		}
+		if r.URL.Query().Get("resourceVersion") != "42" {
+			t.Errorf("watch ignored caller checkpoint: %s", r.URL)
+		}
+		pod := unstructured.Unstructured{Object: map[string]interface{}{"apiVersion": "v1", "kind": "Pod", "metadata": map[string]interface{}{"name": "web", "namespace": "apps", "uid": "web", "resourceVersion": "43"}}}
+		writeWatch(w, watch.Modified, pod)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	c, e := NewClient(&rest.Config{Host: server.URL})
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	r, _ := Resolve(Builtins(), "pods")
+	synced, resets := false, 0
+	e = c.FollowResources(ctx, Query{Resource: r, Namespace: "apps", ResourceVersion: "42"}, func(v EventUpdate) {
+		synced = synced || v.Synced
+		if v.Reset {
+			resets++
+		}
+		if v.Type == watch.Modified {
+			cancel()
+		}
+	})
+	if e != nil || lists.Load() != 0 || resets != 0 || !synced {
+		t.Fatalf("resume relisted or lost sync: lists=%d resets=%d synced=%t err=%v", lists.Load(), resets, synced, e)
+	}
+	deadline := time.Now().Add(time.Second)
+	for warms.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if warms.Load() == 0 {
+		t.Fatal("established watch did not warm a spare connection")
 	}
 }

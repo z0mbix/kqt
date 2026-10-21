@@ -61,6 +61,9 @@ func Status(o unstructured.Unstructured) string {
 	if o.GetDeletionTimestamp() != nil {
 		return "Terminating"
 	}
+	if IsTableRow(o) {
+		return tableStatus(o)
+	}
 	if o.GetKind() == "Pod" {
 		for _, path := range []string{"initContainerStatuses", "containerStatuses"} {
 			for _, value := range Slice(o, "status", path) {
@@ -179,6 +182,11 @@ func Column(o unstructured.Unstructured, id string) string {
 			return fmt.Sprint(EventCount(o))
 		case "message":
 			return EventMessage(o)
+		}
+	}
+	if IsTableRow(o) {
+		if value, ok := tableColumn(o, id); ok {
+			return value
 		}
 	}
 	switch id {
@@ -322,6 +330,7 @@ func Manifest(o unstructured.Unstructured, asJSON bool) string {
 	return manifestText(Redacted(o), asJSON)
 }
 func manifestText(o unstructured.Unstructured, asJSON bool) string {
+	o = withoutTable(o)
 	var data []byte
 	var err error
 	if asJSON {
