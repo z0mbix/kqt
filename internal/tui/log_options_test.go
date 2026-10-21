@@ -15,6 +15,7 @@ import (
 func TestLogPreferencesPreserveDefaultsAndRoundTripYAMLAndTOML(t *testing.T) {
 	for _, extension := range []string{"yaml", "toml"} {
 		t.Run(extension, func(t *testing.T) {
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			path := filepath.Join(t.TempDir(), "config."+extension)
 			text := "version: 1\n# keep me\nlogs:\n  timestamps: false\n"
 			if extension == "toml" {

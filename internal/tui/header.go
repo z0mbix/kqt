@@ -23,7 +23,7 @@ func (m *model) headerView() string {
 	if ctx == "" {
 		ctx = "select context"
 	}
-	ns := m.route.namespace
+	ns, namespaceLabel := m.namespaceLabel()
 	if ns == "" {
 		ns = "all"
 	}
@@ -53,7 +53,7 @@ func (m *model) headerView() string {
 		announcement = m.theme.style("muted").Render(" · " + kube.Safe(m.theme.Name))
 	}
 	left := m.theme.style("foreground").Render(" Context: ") + contextStyle.Render(kube.Safe(ctx))
-	namespace := m.theme.style("foreground").Render(" · Namespace: " + kube.Safe(ns))
+	namespace := m.theme.style("foreground").Render(" · " + namespaceLabel + ": " + kube.Safe(ns))
 	connection := m.theme.style(stateToken).Render(" · " + state)
 	mode := ""
 	if m.options.ReadOnly {

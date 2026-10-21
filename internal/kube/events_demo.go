@@ -14,6 +14,10 @@ import (
 )
 
 func (d *Demo) FollowEvents(ctx context.Context, q Query, emit func(EventUpdate)) error {
+	return followNamespaceScope(ctx, q, emit, d.followEvents)
+}
+
+func (d *Demo) followEvents(ctx context.Context, q Query, emit func(EventUpdate)) error {
 	selector, err := fields.ParseSelector(q.Fields)
 	if err != nil {
 		return err

@@ -74,17 +74,7 @@ func (m *model) completeCommand(reverse bool) {
 					}
 				}
 			case "ns", "namespace":
-				names = []string{"-A", "all"}
-				if m.route.namespace != "" {
-					names = append(names, m.route.namespace)
-				}
-				for _, row := range m.rows {
-					if row.GetKind() == "Namespace" {
-						names = append(names, row.GetName())
-					} else if row.GetNamespace() != "" {
-						names = append(names, row.GetNamespace())
-					}
-				}
+				names = m.namespaceCompletions(parts[1])
 			case "can-i":
 				names = []string{"get", "list", "watch", "patch", "delete", "create", "get log", "get exec", "create exec", "get portforward", "create portforward"}
 			case "copy", "export":

@@ -32,7 +32,7 @@ func TestBundleDownloadPromptAndPrivateArchive(t *testing.T) {
 	if info.Mode().Perm() != 0600 || m.mode != "" || !strings.Contains(m.notice, "saved to") {
 		t.Fatal("bundle did not save privately")
 	}
-	if len(m.settings.Config.CommandHistory) != 1 || m.settings.Config.CommandHistory[0] != "bundle" {
+	if len(m.settings.CommandHistory) != 1 || m.settings.CommandHistory[0] != "bundle" {
 		t.Fatal("successful export missing history")
 	}
 	cmd = m.executeSubmittedCommand("bundle " + path)
@@ -46,11 +46,11 @@ func TestBundleCancelAndFailedHistory(t *testing.T) {
 	m.settings.Config.DownloadDir = t.TempDir()
 	m.executeSubmittedCommand("bundle --logs")
 	m.bundleKey(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.mode != "" || len(m.commandExecutions) != 0 || len(m.settings.Config.CommandHistory) != 0 {
+	if m.mode != "" || len(m.commandExecutions) != 0 || len(m.settings.CommandHistory) != 0 {
 		t.Fatal("cancelled bundle saved history")
 	}
 	m.executeSubmittedCommand("bundle --typo")
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("invalid bundle saved history")
 	}
 	cmd := m.executeSubmittedCommand("bundle cancelled.tar.gz")

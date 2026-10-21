@@ -234,15 +234,15 @@ func TestHeaderCommandsHistoryCompletionAndTextInput(t *testing.T) {
 	m := demoModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	for _, command := range []string{"header off", "header on", "header toggle", "header"} {
-		before := len(m.settings.Config.CommandHistory)
+		before := len(m.settings.CommandHistory)
 		runSubmitted(m, command)
-		if len(m.settings.Config.CommandHistory) != before+1 {
+		if len(m.settings.CommandHistory) != before+1 {
 			t.Fatal("successful header command was not remembered")
 		}
 	}
 	before := m.headerVisible()
 	runSubmitted(m, "header typo")
-	if m.headerVisible() != before || slices.Contains(m.settings.Config.CommandHistory, "header typo") {
+	if m.headerVisible() != before || slices.Contains(m.settings.CommandHistory, "header typo") {
 		t.Fatal("invalid header command changed preferences or entered history")
 	}
 	m.startInput("command", "header of")

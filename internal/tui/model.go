@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -114,6 +115,7 @@ type model struct {
 	resourceContext                          context.Context
 	resourceFeed                             *resourceFeed
 	resourceCache, resourceStaging           map[string]unstructured.Unstructured
+	resourceNamespaceStaging                 map[string]map[string]unstructured.Unstructured
 	resourceWatchState, resourceWatchError   string
 	actionToken                              uint64
 	actionCancel                             context.CancelFunc
@@ -137,6 +139,7 @@ type model struct {
 	failures                                 int
 	lastRefresh                              time.Time
 	dataErr, notice, discoveryWarning        string
+	namespaceWarning                         string
 	route                                    route
 	history                                  []route
 	rows, visible                            []unstructured.Unstructured
@@ -288,6 +291,10 @@ func newModel(ctx context.Context, s *Settings, o Options, l *kube.Loader) (*mod
 			o.Namespace, o.AllNamespaces = s.Config.Namespace, s.Config.AllNamespaces
 		}
 	}
+	var scopeError error
+	if o.Namespace, scopeError = kube.NormalizeNamespaces(o.Namespace); scopeError != nil {
+		return nil, scopeError
+	}
 	m.options = o
 	m.route.namespace, m.route.labels = o.Namespace, o.Labels
 	if o.AllNamespaces {
@@ -299,6 +306,7 @@ func newModel(ctx context.Context, s *Settings, o Options, l *kube.Loader) (*mod
 		m.route.resource = r
 	}
 	m.applyLayout(s.Config.Layout)
+	s.loadCommandHistory()
 	m.resize()
 	return m, nil
 }
@@ -347,6 +355,7 @@ func (m *model) connect(name string) tea.Cmd {
 	m.horizontal = 0
 	m.filter = ""
 	m.dataErr = ""
+	m.namespaceWarning = ""
 	m.notice = ""
 	m.discoveryWarning = ""
 	m.server = ""
@@ -494,6 +503,7 @@ func (m *model) navigate(r route, remember bool) tea.Cmd {
 	m.filter = ""
 	m.mode = ""
 	m.dataErr = ""
+	m.namespaceWarning = ""
 	m.notice = ""
 	m.lastRefresh = time.Time{}
 	m.failures = 0
@@ -547,8 +557,11 @@ func (m *model) columns() []string {
 			}
 		}
 	}
-	if m.route.namespace != "" || !m.route.resource.Namespaced {
+	namespaces, _ := kube.NamespaceNames(m.route.namespace)
+	if len(namespaces) == 1 || !m.route.resource.Namespaced {
 		cols = slices.DeleteFunc(cols, func(c string) bool { return c == "namespace" })
+	} else if len(namespaces) > 1 && !slices.Contains(cols, "namespace") {
+		cols = append([]string{"namespace"}, cols...)
 	}
 	return cols
 }
@@ -780,7 +793,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.busy = false
-		if v.err != nil {
+		if v.err != nil && !kube.PartialNamespaces(v.err) {
 			m.dataErr = kube.Safe(v.err.Error())
 			m.failures++
 		} else {
@@ -789,18 +802,30 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				key = kube.Identity(o)
 			}
 			m.route.selection = ""
+			var partial *kube.NamespaceErrors
+			if errors.As(v.err, &partial) {
+				for _, previous := range m.rows {
+					if _, failed := partial.Failures[previous.GetNamespace()]; failed {
+						v.rows = append(v.rows, previous)
+					}
+				}
+			}
 			m.rows = make([]unstructured.Unstructured, len(v.rows))
 			for i, o := range v.rows {
 				m.hideChangedSecret(o)
 				m.rows[i] = kube.Redacted(o)
 			}
 			m.dataErr = ""
+			m.namespaceWarning = ""
+			if v.err != nil {
+				m.namespaceWarning = kube.Safe(v.err.Error())
+			}
 			m.failures = 0
 			m.lastRefresh = time.Now()
 			m.usage, m.metricsWarning = v.usage, v.metricsError
 			m.rebuild(key)
 		}
-		if v.err == nil && m.resourceFeed == nil && m.resourceWatchError == "" {
+		if (v.err == nil || kube.PartialNamespaces(v.err)) && m.resourceFeed == nil && m.resourceWatchError == "" {
 			return m, tea.Batch(m.startResourceWatch(), m.poll())
 		}
 		return m, m.poll()

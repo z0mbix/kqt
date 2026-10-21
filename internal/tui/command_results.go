@@ -78,6 +78,10 @@ func (m *model) executeSubmittedCommand(value string) tea.Cmd {
 		}
 		return cmd
 	}
+	if (word == "ns" || word == "namespace") && strings.HasPrefix(m.notice, "Saved namespace group ") {
+		m.rememberCommandAt(value, sequence)
+		return cmd
+	}
 	if m.mode == "delete-confirm" && word == "delete" {
 		m.addHistoryExecution(value, "action", "", m.actionToken)
 		return cmd

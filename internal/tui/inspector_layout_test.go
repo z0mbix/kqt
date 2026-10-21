@@ -324,11 +324,11 @@ func TestInspectorCommandsRecordOnlySuccess(t *testing.T) {
 	for _, command := range []string{"inspector off", "inspector bottom", "inspector toggle", "inspector on"} {
 		runSubmitted(m, command)
 	}
-	if len(m.settings.Config.CommandHistory) != 4 {
+	if len(m.settings.CommandHistory) != 4 {
 		t.Fatal("successful inspector commands were not remembered")
 	}
 	runSubmitted(m, "inspector typo")
-	if len(m.settings.Config.CommandHistory) != 4 {
+	if len(m.settings.CommandHistory) != 4 {
 		t.Fatal("invalid inspector command was remembered")
 	}
 	m.startInput("command", "inspector pos")

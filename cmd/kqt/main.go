@@ -11,10 +11,9 @@ import (
 	"github.com/z0mbix/kqt/internal/kube"
 	"github.com/z0mbix/kqt/internal/tui"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-var version = "0.5.2-dev"
+var version = "0.6.0-dev"
 
 func command() *cobra.Command {
 	var o tui.Options
@@ -24,7 +23,7 @@ func command() *cobra.Command {
 	f.StringVar(&kubeconfig, "kubeconfig", "", "Kubeconfig file (default: KUBECONFIG or ~/.kube/config)")
 	f.StringVar(&config, "config", "", "UI configuration (default: ~/.config/kqt/config.yaml)")
 	f.StringVar(&o.Context, "context", "", "Kubeconfig context for this session")
-	f.StringVarP(&o.Namespace, "namespace", "n", "", "Namespace (default: context namespace)")
+	f.StringVarP(&o.Namespace, "namespace", "n", "", "Namespace or comma-separated namespaces (default: saved/context namespace)")
 	f.BoolVarP(&o.AllNamespaces, "all-namespaces", "A", false, "Browse all namespaces")
 	f.StringVar(&o.View, "view", "", "Initial resource name, kind, or alias (default: saved view)")
 	f.StringVarP(&o.Labels, "selector", "l", "", "Kubernetes label selector")
@@ -56,8 +55,8 @@ func command() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if o.Namespace != "" && len(validation.IsDNS1123Label(o.Namespace)) > 0 {
-			return fmt.Errorf("invalid namespace %q", o.Namespace)
+		if o.Namespace, err = kube.NormalizeNamespaces(o.Namespace); err != nil {
+			return err
 		}
 		if _, err = labels.Parse(o.Labels); err != nil {
 			return fmt.Errorf("invalid label selector: %w", err)

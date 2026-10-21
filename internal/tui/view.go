@@ -388,6 +388,9 @@ func (m *model) baseView() tea.View {
 		lines = append(lines, body)
 		status, token := m.notice, "warning"
 		if status == "" {
+			status = m.settings.historyWarning
+		}
+		if status == "" {
 			status = m.metricsWarning
 		}
 		if status == "" {
@@ -406,6 +409,9 @@ func (m *model) baseView() tea.View {
 		if m.dataErr != "" {
 			status = " STALE · " + m.dataErr
 			token = "error"
+		} else if m.namespaceWarning != "" {
+			status = " " + m.namespaceWarning
+			token = "warning"
 		}
 		if m.secretTarget != "" {
 			status = " Secret " + m.secretLabel() + " · " + status

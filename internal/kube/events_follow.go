@@ -25,23 +25,25 @@ type EventWatcher interface {
 // State updates accompany object changes. Synced means the initial list has
 // completed; Gap labels an expired history rather than promising replay.
 type EventUpdate struct {
-	Type    watch.EventType
-	Object  unstructured.Unstructured
-	State   string
-	Message string
-	Synced  bool
-	Reset   bool
-	Gap     bool
+	Type        watch.EventType
+	Object      unstructured.Unstructured
+	State       string
+	Message     string
+	Synced      bool
+	Reset       bool
+	Gap         bool
+	Namespace   string // Namespace-specific list/reset checkpoint in a combined watch.
+	ScopeStatus bool   // Message describes combined namespace availability.
 }
 
 func (c *Client) FollowEvents(ctx context.Context, q Query, emit func(EventUpdate)) error {
 	if q.Resource.Kind != "Event" {
 		return fmt.Errorf("event watches require an Event resource")
 	}
-	return c.followObjects(ctx, q, emit)
+	return followNamespaceScope(ctx, q, emit, c.followObjects)
 }
 func (c *Client) FollowResources(ctx context.Context, q Query, emit func(EventUpdate)) error {
-	return c.followObjects(ctx, q, emit)
+	return followNamespaceScope(ctx, q, emit, c.followObjects)
 }
 func (c *Client) followObjects(ctx context.Context, q Query, emit func(EventUpdate)) error {
 	selector, err := fields.ParseSelector(q.Fields)

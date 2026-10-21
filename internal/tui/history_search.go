@@ -16,7 +16,7 @@ type historySearch struct {
 }
 
 func (m *model) startHistorySearch() tea.Cmd {
-	m.historySearch = &historySearch{entries: slices.Clone(m.settings.Config.CommandHistory), draft: m.input.Value(), cursor: m.input.Position(), index: -1}
+	m.historySearch = &historySearch{entries: slices.Clone(m.settings.CommandHistory), draft: m.input.Value(), cursor: m.input.Position(), index: -1}
 	m.mode = "history-search"
 	m.completion = completionState{}
 	m.input.Prompt = "(reverse-i-search): "
@@ -49,7 +49,7 @@ func (m *model) finishHistorySearch(accept bool) tea.Cmd {
 	m.input.Prompt = ":"
 	m.input.SetValue(value)
 	m.input.SetCursor(cursor)
-	m.commandHistoryIndex = len(m.settings.Config.CommandHistory)
+	m.commandHistoryIndex = len(m.settings.CommandHistory)
 	m.commandDraft, m.commandDraftCursor = value, cursor
 	m.resize()
 	m.input.SetCursor(cursor)

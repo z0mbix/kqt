@@ -819,3 +819,30 @@ and persisted-setting restarts passed at 80x24, 180x48 and 80x40. Focused termin
 scenarios passed for header visibility, paging, inspector placement, log controls
 and log options. The new wide-view terminal scenario passed at 80, 240 and 320
 columns and is included in CI and `just smoke`.
+
+## v0.6.0 namespace selections and cached history
+
+Backend contract tests exercise individual namespace endpoints, pagination,
+selectors, duplicate selections, same-name resources across namespaces, metrics
+API fallback, partial permission failures, per-namespace watch expiry/relisting,
+and cancellation. Model tests cover saved YAML/TOML groups, context isolation,
+invalid selections, completion, custom namespace columns, preserved node
+drill-down scope, scoped cache resets and retained partial-result warnings.
+
+History tests cover private atomic cache writes, macOS/XDG path selection,
+YAML/TOML migration, preserved comments/settings, cache and cleanup failures,
+retry without duplicate imports, malformed cache recovery and clearing history.
+Configured limits cover one, seven and 125 commands, the default of 100,
+restart, recall, reverse search, reduced limits and legacy-history migration.
+Invalid limits cannot replace the config. Command submission ordering and the
+exclusion of failed or cancelled operations retain their existing coverage.
+
+Go race tests, vet and all fifteen Python tests passed for the release snapshot.
+The isolated namespace and command-history terminal scenarios verify combined
+live events/metrics, saved-group restarts, first-start history migration,
+five-command retention, incremental search and unchanged config during
+history-only commands. These scenarios run in CI and `just smoke`.
+
+The full local `just smoke` suite passed before publication, including classic,
+inspector and bottom-layout restart checks, operator workflows and every feature
+scenario.

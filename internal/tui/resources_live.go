@@ -66,6 +66,7 @@ func (m *model) stopResourceWatch() {
 	m.resourceContext = nil
 	m.resourceCache = nil
 	m.resourceStaging = nil
+	m.resourceNamespaceStaging = nil
 	m.resourceWatchState = ""
 }
 func (m *model) startResourceWatch() tea.Cmd {
@@ -81,6 +82,7 @@ func (m *model) startResourceWatch() tea.Cmd {
 	m.resourceFeed = f
 	m.resourceWatchState = "connecting"
 	m.resourceCache = map[string]unstructured.Unstructured{}
+	m.resourceNamespaceStaging = map[string]map[string]unstructured.Unstructured{}
 	for _, o := range m.rows {
 		m.resourceCache[kube.Identity(o)] = o
 	}
@@ -115,13 +117,20 @@ func (m *model) resourceBatch(v resourceBatchMsg) tea.Cmd {
 	}
 	changed := false
 	for _, update := range v.changes {
+		if update.ScopeStatus && (update.Message != "" || update.Synced) {
+			m.namespaceWarning = kube.Safe(update.Message)
+		}
+		if update.Namespace != "" {
+			changed = m.resourceNamespaceChange(update) || changed
+			continue
+		}
 		if update.Reset {
 			m.resourceStaging = map[string]unstructured.Unstructured{}
 		}
 		if update.State != "" {
 			m.resourceWatchState = update.State
 		}
-		if update.Message != "" {
+		if update.Message != "" && !update.ScopeStatus {
 			m.dataErr = update.Message
 		}
 		cache := m.resourceCache
@@ -174,6 +183,48 @@ func (m *model) resourceBatch(v resourceBatchMsg) tea.Cmd {
 		return m.poll()
 	}
 	return waitResources(m.session.ctx, v.generation, v.token, v.feed)
+}
+
+func (m *model) resourceNamespaceChange(update kube.EventUpdate) bool {
+	ns := update.Namespace
+	if !kube.NamespaceIncluded(m.route.namespace, ns) {
+		return false
+	}
+	if update.Reset {
+		if m.resourceNamespaceStaging == nil {
+			m.resourceNamespaceStaging = map[string]map[string]unstructured.Unstructured{}
+		}
+		m.resourceNamespaceStaging[ns] = map[string]unstructured.Unstructured{}
+	}
+	cache := m.resourceCache
+	stage, staging := m.resourceNamespaceStaging[ns]
+	if staging {
+		cache = stage
+	}
+	changed := false
+	if update.Type != "" && update.Type != watch.Bookmark && update.Object.GetNamespace() == ns {
+		m.hideChangedSecret(update.Object)
+		key := kube.Identity(update.Object)
+		if update.Type == watch.Deleted {
+			delete(cache, key)
+		} else {
+			cache[key] = update.Object
+		}
+		changed = !staging
+	}
+	if update.Synced && staging {
+		for key, object := range m.resourceCache {
+			if object.GetNamespace() == ns {
+				delete(m.resourceCache, key)
+			}
+		}
+		for key, object := range stage {
+			m.resourceCache[key] = object
+		}
+		delete(m.resourceNamespaceStaging, ns)
+		changed = true
+	}
+	return changed
 }
 
 type resourceMetricsMsg struct {

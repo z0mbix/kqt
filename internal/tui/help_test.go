@@ -41,7 +41,7 @@ func TestHelpSearchIsLiveAndKeepsResourceAndHistoryState(t *testing.T) {
 	m := demoModel(t)
 	m.filter = "web"
 	m.selected = 3
-	selected, namespace, history := m.selected, m.route.namespace, len(m.settings.Config.CommandHistory)
+	selected, namespace, history := m.selected, m.route.namespace, len(m.settings.CommandHistory)
 	key(m, "?")
 	key(m, "/")
 	typeHelpQuery(m, "rllts")
@@ -53,7 +53,7 @@ func TestHelpSearchIsLiveAndKeepsResourceAndHistoryState(t *testing.T) {
 		t.Fatal("Enter did not keep the filtered results")
 	}
 	key(m, "esc")
-	if m.mode != "" || m.filter != "web" || m.selected != selected || m.route.namespace != namespace || len(m.settings.Config.CommandHistory) != history {
+	if m.mode != "" || m.filter != "web" || m.selected != selected || m.route.namespace != namespace || len(m.settings.CommandHistory) != history {
 		t.Fatal("help search changed resource scope, selection, filter or history")
 	}
 	m.command("help")

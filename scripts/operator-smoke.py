@@ -50,7 +50,7 @@ def run(root, bad_shell=False):
     master, slave = os.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', height, width, 0, 0))
     original = termios.tcgetattr(slave)
-    env = dict(os.environ, TERM='xterm-256color', COLORTERM='truecolor')
+    env = dict(os.environ, TERM='xterm-256color', COLORTERM='truecolor', XDG_CACHE_HOME=str(root/'cache'))
     process = subprocess.Popen([sys.executable, '-c', wrapper, *launch], stdin=slave, stdout=slave, stderr=slave, env=env, preexec_fn=setup_child)
     raw = bytearray()
     resize_events = [(0, width, height)]

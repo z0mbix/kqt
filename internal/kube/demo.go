@@ -129,6 +129,11 @@ func (d *Demo) Resources(context.Context) ([]Resource, error) {
 	return Merge([]Resource{{schema.GroupVersionResource{Group: "exploration.kqt.dev", Version: "v1", Resource: "widgets"}, "Widget", true, []string{"wdg"}}}), nil
 }
 func (d *Demo) List(ctx context.Context, q Query) ([]unstructured.Unstructured, error) {
+	if q.Resource.Namespaced {
+		if _, err := NamespaceNames(q.Namespace); err != nil {
+			return nil, err
+		}
+	}
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	if err := ctx.Err(); err != nil {
@@ -144,7 +149,7 @@ func (d *Demo) List(ctx context.Context, q Query) ([]unstructured.Unstructured, 
 	}
 	var result []unstructured.Unstructured
 	for _, o := range d.objects {
-		if o.GetKind() != q.Resource.Kind || q.Resource.Namespaced && q.Namespace != "" && o.GetNamespace() != q.Namespace || !selector.Matches(labels.Set(o.GetLabels())) {
+		if o.GetKind() != q.Resource.Kind || q.Resource.Namespaced && !NamespaceIncluded(q.Namespace, o.GetNamespace()) || !selector.Matches(labels.Set(o.GetLabels())) {
 			continue
 		}
 		if !fieldSelector.Matches(fields.Set{"metadata.name": o.GetName(), "metadata.namespace": o.GetNamespace(), "spec.nodeName": Text(o, "spec", "nodeName"), "involvedObject.uid": Text(o, "involvedObject", "uid")}) {

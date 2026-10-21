@@ -21,6 +21,16 @@ type MetricsReader interface {
 func UsageKey(o unstructured.Unstructured) string { return o.GetNamespace() + "/" + o.GetName() }
 
 func (c *Client) Metrics(ctx context.Context, kind, namespace string) (map[string]Usage, error) {
+	if kind == "Pod" {
+		names, err := NamespaceNames(namespace)
+		if err != nil {
+			return nil, err
+		}
+		if len(names) > 1 {
+			return metricsNamespaces(ctx, kind, names, c)
+		}
+		namespace = strings.Join(names, ",")
+	}
 	name := "pods"
 	if kind == "Node" {
 		name = "nodes"

@@ -112,11 +112,11 @@ func TestDebugPreviewCancellationHistoryAndReadOnly(t *testing.T) {
 	oldToken := m.debugToken
 	key(m, "esc")
 	m.Update(debugPreparedMsg{generation: m.generation, token: oldToken, plan: &kube.DebugPlan{}})
-	if m.debug != nil || m.mode != "" || len(m.settings.Config.CommandHistory) != 0 {
+	if m.debug != nil || m.mode != "" || len(m.settings.CommandHistory) != 0 {
 		t.Fatal("cancelled preview survived or entered history")
 	}
 	runSubmitted(m, "debug missing")
-	if len(m.settings.Config.CommandHistory) != 0 || !strings.Contains(m.notice, "Unknown debug profile") {
+	if len(m.settings.CommandHistory) != 0 || !strings.Contains(m.notice, "Unknown debug profile") {
 		t.Fatal("unknown profile entered history")
 	}
 	m.options.ReadOnly = true
@@ -140,20 +140,20 @@ func TestDebugConfirmedStartKeepsHistoryPendingUntilAttachment(t *testing.T) {
 		t.Fatal(started.err)
 	}
 	_, attach := m.Update(started)
-	if attach == nil || m.mode != "shell" || len(m.settings.Config.CommandHistory) != 0 {
+	if attach == nil || m.mode != "shell" || len(m.settings.CommandHistory) != 0 {
 		t.Fatal("start did not hand off terminal or history saved early")
 	}
 	name := plan.Container.Name
 	token := m.debugToken
 	m.Update(debugClosedMsg{generation: m.generation, token: token, name: name, disconnected: true, connected: true})
-	if !slices.Contains(m.settings.Config.CommandHistory, "debug approved") || !strings.Contains(m.notice, ":debug attach "+name) {
-		t.Fatalf("successful disconnect not saved / reattach missing: %#v %s", m.settings.Config.CommandHistory, m.notice)
+	if !slices.Contains(m.settings.CommandHistory, "debug approved") || !strings.Contains(m.notice, ":debug attach "+name) {
+		t.Fatalf("successful disconnect not saved / reattach missing: %#v %s", m.settings.CommandHistory, m.notice)
 	}
 	// A cancelled connection before receiving any remote output is not successful.
 	m.addHistoryExecution("debug attach "+name, "debug", "", m.debugToken)
 	m.mode = "shell"
 	m.Update(debugClosedMsg{generation: m.generation, token: m.debugToken, name: name, disconnected: true})
-	if slices.Contains(m.settings.Config.CommandHistory, "debug attach "+name) {
+	if slices.Contains(m.settings.CommandHistory, "debug attach "+name) {
 		t.Fatal("unconnected attachment entered history")
 	}
 }
@@ -170,7 +170,7 @@ func TestDebugFailureHistoryAndStaleResults(t *testing.T) {
 	m.backend = &debugDeniedBackend{kube.NewDemo()}
 	cmd := runSubmitted(m, "debug approved")
 	m.Update(cmd())
-	if m.mode != "operation-error" || len(m.settings.Config.CommandHistory) != 0 || !strings.Contains(m.panel.GetContent(), "permission denied") {
+	if m.mode != "operation-error" || len(m.settings.CommandHistory) != 0 || !strings.Contains(m.panel.GetContent(), "permission denied") {
 		t.Fatal("denied preflight succeeded")
 	}
 	m.mode = "debug-starting"
@@ -238,12 +238,12 @@ func TestDebugRequiresConfiguredImageAndProfilePickerCancellation(t *testing.T) 
 		t.Fatal("no profile picker")
 	}
 	cmd := m.pickerKey(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if cmd == nil || m.mode != "debug-loading" || len(m.settings.Config.CommandHistory) != 0 {
+	if cmd == nil || m.mode != "debug-loading" || len(m.settings.CommandHistory) != 0 {
 		t.Fatal("profile selection prematurely saved history")
 	}
 	m.Update(cmd())
 	key(m, "esc")
-	if m.debug != nil || len(m.commandExecutions) != 0 || len(m.settings.Config.CommandHistory) != 0 {
+	if m.debug != nil || len(m.commandExecutions) != 0 || len(m.settings.CommandHistory) != 0 {
 		t.Fatal("cancelled picker kept pending debug state")
 	}
 }

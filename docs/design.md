@@ -238,3 +238,36 @@ existing exclusive-create download path logic and removes partial writes.
 Deletion uses a compact centred No/Yes dialog with No selected initially.
 Keyboard, rendering and mouse hit testing share the same modal bounds. Existing
 UID/specification and deletion version preconditions still gate the operation.
+
+## Namespace selections and saved groups
+
+Namespace scope accepts an explicit, normalized comma-separated list of up to 64
+names. Empty members and mixed wildcard selections fail validation. Namespaced
+list and metrics requests use individual namespace endpoints with at most four
+requests in flight; no cluster-wide list permission is required. Cluster-scoped
+resources are requested once. Watches retain independent resource versions and
+relist boundaries per namespace, with serialized callbacks into the model.
+An unavailable namespace does not stop healthy streams. Partial-results warnings
+remain visible, and previously loaded rows from failed namespaces are retained
+until refreshed successfully. Node-to-pod navigation preserves the selected scope.
+
+`:ns save NAME` stores an explicit selection under the actual kubeconfig context;
+`:ns @NAME` selects it. Groups and the current namespace selection survive normal
+route/preference saves. Multi-namespace tables always identify each row's
+namespace, including when a custom column configuration omits that column.
+
+## Cached command history
+
+Successful commands use a separate private JSON cache, independent of ordinary
+config writes. `history_limit` is a positive integer, defaults to 100, and applies
+to in-memory history, persisted entries, restart, recall and reverse search.
+Entries retain submission order when asynchronous operations complete out of
+order. Lower limits retain the newest commands.
+
+`XDG_CACHE_HOME` takes precedence. The macOS fallback is `~/.local/cache/kqt/`;
+Linux and FreeBSD use the system cache directory. Writes use a private temporary
+file, sync and atomic replacement. Legacy YAML/TOML history is copied before its
+config field is removed; cleanup retries avoid duplicate imports. Cache errors
+are warnings, with command execution and in-memory recall still available.
+History is loaded/migrated only when starting the TUI, so config validation and
+theme listing remain independent of cache availability.

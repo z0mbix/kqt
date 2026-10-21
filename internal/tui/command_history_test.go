@@ -46,7 +46,7 @@ func TestCommandHistoryRecallsWithoutExecutingAndRestoresDraft(t *testing.T) {
 	historyKey(m, tea.KeyUp)
 	m.input.SetValue("theme dracula")
 	historyKey(m, tea.KeyEnter)
-	if m.theme.Name != "dracula" || len(m.settings.Config.CommandHistory) != 4 {
+	if m.theme.Name != "dracula" || len(m.settings.CommandHistory) != 4 {
 		t.Fatal("edited recalled command was not submitted")
 	}
 	m.startInput("command", "")
@@ -58,7 +58,7 @@ func TestCommandHistoryRecallsWithoutExecutingAndRestoresDraft(t *testing.T) {
 
 func TestCommandHistoryBoundPersistenceAndCancelledInputs(t *testing.T) {
 	m := demoModel(t)
-	for i := range commandHistoryLimit + 3 {
+	for i := range defaultHistoryLimit + 3 {
 		submitCommand(m, fmt.Sprintf("sort /metadata/labels/history%d asc", i))
 	}
 	submitCommand(m, "   ")
@@ -67,17 +67,21 @@ func TestCommandHistoryBoundPersistenceAndCancelledInputs(t *testing.T) {
 	m.startInput("filter", "web")
 	historyKey(m, tea.KeyUp)
 	historyKey(m, tea.KeyEnter)
-	history := m.settings.Config.CommandHistory
-	if len(history) != 50 || history[0] != "sort /metadata/labels/history3 asc" || history[49] != "sort /metadata/labels/history52 asc" {
-		t.Fatalf("history did not retain last 50 successful commands: %v", history)
+	history := m.settings.CommandHistory
+	if len(history) != defaultHistoryLimit || history[0] != "sort /metadata/labels/history3 asc" || history[defaultHistoryLimit-1] != fmt.Sprintf("sort /metadata/labels/history%d asc", defaultHistoryLimit+2) {
+		t.Fatalf("history did not retain the default number of successful commands: %v", history)
 	}
 	saved, err := LoadSettings(m.settings.Path)
-	if err != nil || !slices.Equal(saved.Config.CommandHistory, history) {
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved.loadCommandHistory()
+	if !slices.Equal(saved.CommandHistory, history) {
 		t.Fatalf("history did not persist: %v", err)
 	}
-	info, err := os.Stat(saved.Path)
+	info, err := os.Stat(saved.historyPath)
 	if err != nil || info.Mode().Perm() != 0600 {
-		t.Fatal("saved history config is not private")
+		t.Fatal("saved history cache is not private")
 	}
 	restarted, err := newModel(context.Background(), saved, Options{Demo: true}, nil)
 	if err != nil {
@@ -85,7 +89,7 @@ func TestCommandHistoryBoundPersistenceAndCancelledInputs(t *testing.T) {
 	}
 	defer restarted.close()
 	restarted.startInput("command", "")
-	for i := 49; i >= 0; i-- {
+	for i := len(history) - 1; i >= 0; i-- {
 		historyKey(restarted, tea.KeyUp)
 		if restarted.input.Value() != history[i] {
 			t.Fatalf("restarted history entry %d: %q", i, restarted.input.Value())
@@ -141,16 +145,24 @@ func TestCommandHistoryConfigFormatsPreserveOtherSettings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			s.loadCommandHistory()
 			m.settings = s
 			submitCommand(m, "  theme nord  ")
 			if m.theme.Name != "nord" {
 				t.Fatal("surrounding whitespace prevented command execution")
 			}
 			saved, err := LoadSettings(s.Path)
-			if err != nil || !slices.Equal(saved.Config.CommandHistory, []string{"themes", "layouts", "theme nord"}) || saved.Config.Editor != "nvim -f" {
-				t.Fatalf("history patch lost settings: %+v, %v", saved, err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			saved.loadCommandHistory()
+			if !slices.Equal(saved.CommandHistory, []string{"themes", "layouts", "theme nord"}) || saved.Config.Editor != "nvim -f" {
+				t.Fatalf("history migration lost commands or settings: %v, %v", saved.CommandHistory, err)
 			}
 			data, _ := os.ReadFile(s.Path)
+			if strings.Contains(string(data), "command_history") {
+				t.Fatal("migrated history remains in config")
+			}
 			if format == "yaml" && !strings.Contains(string(data), "# keep editor") {
 				t.Fatal("history patch lost YAML comment")
 			}

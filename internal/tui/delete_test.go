@@ -37,7 +37,7 @@ func TestDeleteNoByDefaultAndCompactCentred(t *testing.T) {
 func TestDeleteYesUsesExistingActionAndRecordsOnlySuccess(t *testing.T) {
 	m := demoModel(t)
 	runSubmitted(m, "delete")
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("unconfirmed delete entered history")
 	}
 	m.deleteKey(tea.KeyPressMsg{Code: tea.KeyRight})
@@ -47,7 +47,7 @@ func TestDeleteYesUsesExistingActionAndRecordsOnlySuccess(t *testing.T) {
 	}
 	_, refresh := m.Update(cmd())
 	m.Update(refresh())
-	if len(m.rows) != 11 || len(m.settings.Config.CommandHistory) != 1 || m.settings.Config.CommandHistory[0] != "delete" {
+	if len(m.rows) != 11 || len(m.settings.CommandHistory) != 1 || m.settings.CommandHistory[0] != "delete" {
 		t.Fatal("confirmed deletion or history failed")
 	}
 }

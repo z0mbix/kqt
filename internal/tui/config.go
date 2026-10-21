@@ -13,7 +13,6 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 	yaml "go.yaml.in/yaml/v3"
-	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 type viewConfig struct {
@@ -22,9 +21,10 @@ type viewConfig struct {
 	Descending bool     `toml:"descending,omitempty" yaml:"descending,omitempty"`
 }
 type contextState struct {
-	View          string `toml:"view,omitempty" yaml:"view,omitempty"`
-	Namespace     string `toml:"namespace,omitempty" yaml:"namespace,omitempty"`
-	AllNamespaces bool   `toml:"all_namespaces,omitempty" yaml:"all_namespaces,omitempty"`
+	View            string              `toml:"view,omitempty" yaml:"view,omitempty"`
+	Namespace       string              `toml:"namespace,omitempty" yaml:"namespace,omitempty"`
+	AllNamespaces   bool                `toml:"all_namespaces,omitempty" yaml:"all_namespaces,omitempty"`
+	NamespaceGroups map[string][]string `toml:"namespace_groups,omitempty" yaml:"namespace_groups,omitempty"`
 }
 type layoutProfile struct {
 	Wide             *bool                 `toml:"wide,omitempty" yaml:"wide,omitempty"`
@@ -51,7 +51,8 @@ type config struct {
 	DownloadDir       string                   `toml:"download_dir,omitempty" yaml:"download_dir,omitempty"`
 	Logs              logPreferences           `toml:"logs" yaml:"logs"`
 	Debug             debugConfig              `toml:"debug,omitempty" yaml:"debug,omitempty"`
-	CommandHistory    []string                 `toml:"command_history,omitempty" yaml:"command_history,omitempty"`
+	HistoryLimit      int                      `toml:"history_limit,omitempty" yaml:"history_limit,omitempty"`
+	LegacyHistory     []string                 `toml:"command_history,omitempty" yaml:"command_history,omitempty"` // Read only for migration.
 	ReadOnly          bool                     `toml:"read_only,omitempty" yaml:"read_only,omitempty"`
 	Views             map[string]viewConfig    `toml:"views,omitempty" yaml:"views,omitempty"`
 	Layouts           map[string]layoutProfile `toml:"layouts,omitempty" yaml:"layouts,omitempty"`
@@ -59,11 +60,14 @@ type config struct {
 	ContextAliases    map[string]string        `toml:"context_aliases,omitempty" yaml:"context_aliases,omitempty"`
 }
 type Settings struct {
-	Path     string
-	Config   config
-	Themes   map[string]theme
-	Layouts  map[string]layoutProfile
-	Interval time.Duration
+	Path           string
+	Config         config
+	Themes         map[string]theme
+	Layouts        map[string]layoutProfile
+	Interval       time.Duration
+	CommandHistory []string
+	historyPath    string
+	historyWarning string
 }
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
@@ -101,7 +105,7 @@ func DefaultConfigPath() string {
 	return filepath.Join(root, "kqt", "config.yaml")
 }
 func defaultConfig() config {
-	return config{Version: 1, Theme: "catppuccin-mocha", Layout: "inspector", View: "pods", InspectorFormat: "yaml", Refresh: "2s", Logs: defaultLogPreferences(), Views: map[string]viewConfig{}, Layouts: map[string]layoutProfile{}, Contexts: map[string]contextState{}}
+	return config{Version: 1, Theme: "catppuccin-mocha", Layout: "inspector", View: "pods", InspectorFormat: "yaml", Refresh: "2s", HistoryLimit: defaultHistoryLimit, Logs: defaultLogPreferences(), Views: map[string]viewConfig{}, Layouts: map[string]layoutProfile{}, Contexts: map[string]contextState{}}
 }
 func decodeConfig(path string, data []byte, c *config) error {
 	if filepath.Ext(path) == ".toml" {
@@ -153,7 +157,9 @@ func LoadSettings(path string) (*Settings, error) {
 	if c.Contexts == nil {
 		c.Contexts = map[string]contextState{}
 	}
-	c.CommandHistory = boundedCommandHistory(c.CommandHistory)
+	if err = validateHistoryLimit(c.HistoryLimit); err != nil {
+		return nil, err
+	}
 	if err = validateDebugConfig(c.Debug); err != nil {
 		return nil, err
 	}
@@ -180,13 +186,8 @@ func LoadSettings(path string) (*Settings, error) {
 	if _, err := downloadDirectory(c.DownloadDir); err != nil {
 		return nil, fmt.Errorf("invalid download_dir: %w", err)
 	}
-	if c.Namespace != "" && len(validation.IsDNS1123Label(c.Namespace)) > 0 {
-		return nil, fmt.Errorf("invalid saved namespace %q", c.Namespace)
-	}
-	for name, v := range c.Contexts {
-		if v.Namespace != "" && len(validation.IsDNS1123Label(v.Namespace)) > 0 {
-			return nil, fmt.Errorf("context %s: invalid saved namespace", name)
-		}
+	if err = normalizeNamespacePreferences(&c); err != nil {
+		return nil, err
 	}
 	d, err := time.ParseDuration(c.Refresh)
 	if err != nil || d < 500*time.Millisecond || d > time.Minute {
@@ -310,11 +311,20 @@ layout: inspector
 view: pods
 namespace: default
 all_namespaces: false
+# Select several with :ns prod-dep,prod-ccp,prod-global,prod-system
+# :ns save production saves a group; :ns @production selects it later.
+# Groups belong to actual kubeconfig contexts, not their display aliases:
+# contexts:
+#   my-work-context:
+#     namespace: prod-dep,prod-ccp,prod-global,prod-system
+#     namespace_groups:
+#       production: [prod-dep, prod-ccp, prod-global, prod-system]
 inspector_format: yaml
 # inspector_position: right # right or bottom; I opens the placement chooser
 # inspector_visible: true # i toggles; omitted uses the selected layout's default
 # header_visible: true # z toggles the explorer header
 refresh_interval: 2s
+history_limit: 100 # number of successful commands retained; positive integer
 # read_only: true # disables resource changes and shells
 # editor: "code --wait" # default: $EDITOR, then $VISUAL, then vi
 # shell: "/bin/sh" # command inside the selected running container

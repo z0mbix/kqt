@@ -40,7 +40,7 @@ func TestFailedAndMistypedCommandsNeverEnterHistory(t *testing.T) {
 	m := demoModel(t)
 	for _, value := range []string{"themse", "theme missing", "ctx missing", "ns WRONG!", "sort name sideways", "columns", "inspector jsno", "logs typo", "pods typo", "help typo", "metrics maybe", "alias bad name extra", "unalias missing", "rollback invalid", "export invalid", "forward 1:99999"} {
 		runSubmitted(m, value)
-		if len(m.settings.Config.CommandHistory) != 0 {
+		if len(m.settings.CommandHistory) != 0 {
 			t.Fatalf("failed command %q was saved", value)
 		}
 	}
@@ -49,11 +49,11 @@ func TestFailedAndMistypedCommandsNeverEnterHistory(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("valid resource command did not run")
 	}
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("request entered history before success")
 	}
 	m.Update(cmd())
-	if len(m.settings.Config.CommandHistory) != 0 || !strings.Contains(m.dataErr, "forbidden") {
+	if len(m.settings.CommandHistory) != 0 || !strings.Contains(m.dataErr, "forbidden") {
 		t.Fatal("API failure was saved or hidden")
 	}
 }
@@ -62,11 +62,11 @@ func TestHistoryWaitsForActionAndDropsCancelledOrFailedOperations(t *testing.T) 
 	m := demoModel(t)
 	m.Update(m.changeResource("deployments", false)())
 	runSubmitted(m, "scale 3")
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("confirmation counted as successful action")
 	}
 	key(m, "esc")
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("cancelled action was saved")
 	}
 	backend := &historyFailureBackend{Demo: kube.NewDemo(), failPatch: true}
@@ -75,15 +75,15 @@ func TestHistoryWaitsForActionAndDropsCancelledOrFailedOperations(t *testing.T) 
 	m.input.SetValue("default/web")
 	cmd := m.actionInputKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m.Update(cmd())
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("failed action was saved")
 	}
 	backend.failPatch = false
 	runSubmitted(m, "scale 3")
 	m.input.SetValue("default/web")
 	m.Update(m.actionInputKey(tea.KeyPressMsg{Code: tea.KeyEnter})())
-	if !slices.Equal(m.settings.Config.CommandHistory, []string{"scale 3"}) {
-		t.Fatal("successful action was not saved", m.settings.Config.CommandHistory)
+	if !slices.Equal(m.settings.CommandHistory, []string{"scale 3"}) {
+		t.Fatal("successful action was not saved", m.settings.CommandHistory)
 	}
 }
 
@@ -94,20 +94,24 @@ func TestHistoryExportsOnlyAfterSuccessAndKeepsSubmissionOrder(t *testing.T) {
 	second := fmt.Sprintf("export json %q", filepath.Join(dir, "second.json"))
 	a := runSubmitted(m, first)
 	b := runSubmitted(m, second)
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("exports recorded before completion")
 	}
 	m.Update(b())
 	m.Update(a())
-	if !slices.Equal(m.settings.Config.CommandHistory, []string{first, second}) {
-		t.Fatal("history used completion order", m.settings.Config.CommandHistory)
+	if !slices.Equal(m.settings.CommandHistory, []string{first, second}) {
+		t.Fatal("history used completion order", m.settings.CommandHistory)
 	}
 	m.Update(runSubmitted(m, first)())
-	if len(m.settings.Config.CommandHistory) != 2 {
+	if len(m.settings.CommandHistory) != 2 {
 		t.Fatal("failed overwrite entered history")
 	}
 	saved, err := LoadSettings(m.settings.Path)
-	if err != nil || !slices.Equal(saved.Config.CommandHistory, []string{first, second}) {
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved.loadCommandHistory()
+	if !slices.Equal(saved.CommandHistory, []string{first, second}) {
 		t.Fatal("failed export changed saved history", err)
 	}
 }
@@ -117,16 +121,16 @@ func TestHistoryIgnoresStaleResponsesAndRecordsLogConnectionWithoutOutput(t *tes
 	old := runSubmitted(m, "deploy")
 	latest := runSubmitted(m, "pods")
 	m.Update(old())
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("stale result saved a superseded command")
 	}
 	m.Update(latest())
-	if !slices.Equal(m.settings.Config.CommandHistory, []string{"pods"}) {
+	if !slices.Equal(m.settings.CommandHistory, []string{"pods"}) {
 		t.Fatal("successful resource browse was not saved")
 	}
 	runSubmitted(m, "logs")
 	key(m, "esc") // Cancel the first pod's container picker.
-	if len(m.settings.Config.CommandHistory) != 1 {
+	if len(m.settings.CommandHistory) != 1 {
 		t.Fatal("cancelled logs picker was saved")
 	}
 	m.mode = "logs"
@@ -135,7 +139,7 @@ func TestHistoryIgnoresStaleResponsesAndRecordsLogConnectionWithoutOutput(t *tes
 	m.addHistoryExecution("logs", "logs", "", m.logToken)
 	m.logFeed.opened()
 	m.Update(logPulseMsg{m.generation, m.logToken, m.logFeed})
-	if !slices.Equal(m.settings.Config.CommandHistory, []string{"pods", "logs"}) {
+	if !slices.Equal(m.settings.CommandHistory, []string{"pods", "logs"}) {
 		t.Fatal("connected idle log stream was not saved")
 	}
 }
@@ -148,7 +152,7 @@ func TestHistoryDoesNotSaveActionCancelledAfterConfirmation(t *testing.T) {
 	request := m.actionInputKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	key(m, "esc")
 	m.Update(request())
-	if len(m.settings.Config.CommandHistory) != 0 || m.mode != "" || m.actionPlan != nil || !strings.Contains(m.notice, "cancelled") {
+	if len(m.settings.CommandHistory) != 0 || m.mode != "" || m.actionPlan != nil || !strings.Contains(m.notice, "cancelled") {
 		t.Fatal("cancelled in-flight action was retained or reopened", m.notice)
 	}
 }
@@ -161,7 +165,7 @@ func TestHistoryDropsReadResultsWhenSelectedResourceChanged(t *testing.T) {
 		result := request()
 		m.visible[m.selected].SetUID("replacement-selection")
 		m.Update(result)
-		if len(m.settings.Config.CommandHistory) != 0 || m.mode != "" {
+		if len(m.settings.CommandHistory) != 0 || m.mode != "" {
 			t.Fatalf("%s saved or displayed a cancelled resource read", command)
 		}
 	}

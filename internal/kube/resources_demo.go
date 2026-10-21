@@ -17,6 +17,10 @@ func (d *Demo) notifyResourcesLocked() {
 	}
 }
 func (d *Demo) FollowResources(ctx context.Context, q Query, emit func(EventUpdate)) error {
+	return followNamespaceScope(ctx, q, emit, d.followResources)
+}
+
+func (d *Demo) followResources(ctx context.Context, q Query, emit func(EventUpdate)) error {
 	d.mu.Lock()
 	if d.resourceListeners == nil {
 		d.resourceListeners = map[uint64]chan struct{}{}

@@ -9,7 +9,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/z0mbix/kqt/internal/kube"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 func scroll(v *viewport.Model, key string) bool {
@@ -45,10 +44,13 @@ func (m *model) startInput(mode, value string) tea.Cmd {
 	m.mode = mode
 	m.previousFilter = m.filter
 	m.completion = completionState{}
+	if mode == "command" {
+		m.input.CharLimit = 8192
+	}
 	m.input.SetValue(value)
 	m.input.CursorEnd()
 	if mode == "command" {
-		m.commandHistoryIndex = len(m.settings.Config.CommandHistory)
+		m.commandHistoryIndex = len(m.settings.CommandHistory)
 		m.commandDraft = value
 		m.commandDraftCursor = m.input.Position()
 	}
@@ -538,7 +540,7 @@ func (m *model) drillDown() tea.Cmd {
 		r, _ := kube.Resolve(m.resources, "pods")
 		ns := o.GetNamespace()
 		if o.GetKind() == "Node" {
-			ns = ""
+			ns = m.route.namespace
 		}
 		return m.navigate(route{resource: r, namespace: ns, labels: selector, fields: fields}, true)
 	}
@@ -662,25 +664,7 @@ func (m *model) command(value string) tea.Cmd {
 		}
 		return m.connect(arg)
 	case "ns", "namespace":
-		if arg == "" {
-			return m.changeResource("namespaces", true)
-		}
-		all := arg == "-A" || arg == "all" || arg == "*"
-		if !all && len(validation.IsDNS1123Label(arg)) > 0 {
-			m.notice = "Invalid namespace: " + kube.Safe(arg)
-			return nil
-		}
-		m.options.AllNamespaces = all
-		m.options.Namespace = arg
-		r := m.route
-		r.namespace = arg
-		if all {
-			r.namespace = ""
-			m.options.Namespace = ""
-		}
-		r.fields = ""
-		r.labels = ""
-		return m.navigate(r, false)
+		return m.namespaceCommand(arg)
 	case "alias":
 		return m.aliasCommand(arg, false)
 	case "unalias":
@@ -1131,12 +1115,14 @@ Navigation
 
 Explore
   :                  Command prompt; Tab / Shift+Tab cycle completions
-  Up / Down          Recall last 50 commands in the command prompt
+  Up / Down          Recall command history (100 commands by default)
   Ctrl+R in :        Reverse search successful command history
   History search     Ctrl+R/S older/newer; Enter runs, Tab edits, Esc cancels
   /                  Fuzzy search: web0003 matches web-7c9f6d8b5-0003
   n / :ns            Browse namespaces; Enter selects one
-  :ns NAME / :ns -A   Set namespace / all namespaces (also 0)
+  :ns NAME[,NAME]    Select namespaces; :ns -A or 0 selects all
+  :ns save NAME      Save current namespaces as a per-context group
+  :ns @NAME          Select a saved namespace group
   c / :ctx           Search kubeconfig contexts (session only)
   :alias NAME [CTX]  Save a short context name; :unalias NAME removes it
   r / :resources     Search discovered APIs / CRDs

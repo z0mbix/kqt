@@ -52,7 +52,8 @@ func ReadOverview(ctx context.Context, b Backend, namespace string) Overview {
 			defer mu.Unlock()
 			if err != nil {
 				result.Errors[name] = Safe(err.Error())
-			} else {
+			}
+			if err == nil || PartialNamespaces(err) {
 				result.Objects[name] = objects
 			}
 		})
@@ -69,7 +70,8 @@ func ReadOverview(ctx context.Context, b Backend, namespace string) Overview {
 				defer mu.Unlock()
 				if err != nil {
 					result.Errors[kind+" metrics"] = Safe(err.Error())
-				} else if kind == "Pod" {
+				}
+				if kind == "Pod" {
 					result.PodUsage = usage
 				} else {
 					result.NodeUsage = usage
@@ -198,7 +200,11 @@ func (o Overview) Scope() string {
 }
 func (o Overview) Summary(name string) string {
 	if err := o.Errors[name]; err != "" {
-		return "Unavailable: " + err
+		if _, available := o.Objects[name]; !available {
+			return "Unavailable: " + err
+		}
+		healthy, total := o.Health(name)
+		return fmt.Sprintf("%d healthy / %d total · %s", healthy, total, err)
 	}
 	healthy, total := o.Health(name)
 	return fmt.Sprintf("%d healthy / %d total", healthy, total)

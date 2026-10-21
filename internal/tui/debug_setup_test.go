@@ -62,7 +62,7 @@ func TestFirstDebugImageCancellationValidationSaveAndReuse(t *testing.T) {
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal("configuration permissions are not private")
 	}
-	if len(m.settings.Config.CommandHistory) != 0 {
+	if len(m.settings.CommandHistory) != 0 {
 		t.Fatal("setup counted as a completed debug command")
 	}
 	key(m, "esc")
@@ -105,7 +105,7 @@ func TestFirstDebugImageSaveFailureKeepsPromptAndMemory(t *testing.T) {
 	m.settings.Path = filepath.Join(parent, "config.yaml")
 	m.input.SetValue("registry.example.com/debug:approved")
 	m.debugKey(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.mode != "debug-image" || !strings.Contains(m.panel.GetContent(), "Unable to save") || len(m.settings.Config.Debug.Profiles) != 0 || len(m.settings.Config.CommandHistory) != 0 {
+	if m.mode != "debug-image" || !strings.Contains(m.panel.GetContent(), "Unable to save") || len(m.settings.Config.Debug.Profiles) != 0 || len(m.settings.CommandHistory) != 0 {
 		t.Fatal("failed save published state or continued")
 	}
 }

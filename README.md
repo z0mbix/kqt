@@ -34,6 +34,7 @@ go build -trimpath -o bin/kqt ./cmd/kqt
 kqt --demo                      # Offline sample cluster
 kqt                             # Current context and saved view / namespace
 kqt -A                          # Override saved scope: all namespaces
+kqt -n prod-dep,prod-ccp          # Select several namespaces
 kqt --context staging -n apps --theme nord
 kqt --view deploy --layout classic -l app=web
 ```
@@ -125,11 +126,13 @@ Escape outside search to close it. Reopening help starts with the full view.
 | `Ctrl+D/U` | Half page down / up in lists and focused panels |
 | `h/l`, arrows | Scroll wide tables or manifests |
 | `:`; `Tab` / `Shift+Tab` | Command prompt; cycle completions forward / back |
-| `Up` / `Down` in `:` | Recall the last 50 successful commands |
+| `Up` / `Down` in `:` | Recall successful commands (100 by default) |
 | `Ctrl+R` in `:` | Reverse search history; repeat for older matches |
 | `/` | Fuzzy search; `web0003` matches `web-7c9f6d8b5-0003` |
 | `n`, `:ns` | Namespace table; Enter selects one |
 | `:ns apps`, `:ns -A`, `0` | Set namespace / all namespaces |
+| `:ns apps,platform` | List resources from several namespaces |
+| `:ns save production`, `:ns @production` | Save / select a namespace group for this context |
 | `c`, `:ctx` | Search and switch kubeconfig contexts |
 | `r`, `:resources` | Search APIs and discovered custom resources |
 | `Enter` | Workload/service/node → pods; otherwise describe |
@@ -197,9 +200,22 @@ Pickers use arrows or `Ctrl+J/K` while you type to search.
 
 In the command prompt, Up recalls older commands and Down recalls newer ones.
 Down past the newest entry restores your unfinished command and cursor position.
-Recalling a command only fills the prompt; Enter executes it. The last 50
-successful commands are saved as `command_history` in your config file and remain
-available after restarting. Typos, invalid arguments, failed requests, cancelled
+Recalling a command only fills the prompt; Enter executes it. By default, the last
+100 successful commands are saved in a separate `history.json` cache file and remain
+available after restarting. With `XDG_CACHE_HOME` set, the path is
+`$XDG_CACHE_HOME/kqt/history.json`; otherwise kqt uses
+`~/.local/cache/kqt/history.json` on macOS and `~/.cache/kqt/history.json` on
+Linux/FreeBSD. History files are private (`0600`). Existing `command_history`
+entries in YAML/TOML config files are migrated automatically when the TUI starts;
+the old field is removed only after the cache is saved. Deleting the cache while
+kqt is closed clears history. Config validation does not read or migrate history.
+
+Set `history_limit: 500` in your config file to retain more commands (or choose a
+smaller positive integer). The default is `100`. The same limit applies to saved
+history, arrow-key recall and `Ctrl+R` search. After reducing the limit, kqt keeps
+the newest entries when loading history and on the next save.
+
+Typos, invalid arguments, failed requests, cancelled
 operations and search text are not recorded. Requests enter history after
 success, retaining the order in which you submitted them.
 
@@ -357,7 +373,7 @@ Status remains readable if event permissions/API requests fail, with the failure
 shown separately. `R` reverses the table sort.
 
 ![Readable status for a restarting pod](docs/screenshots/status.png)
-`:events` opens a live event table for the current namespace; `0` switches to all
+`:events` opens a live event table for the selected namespaces; `0` switches to all
 namespaces and `n` selects a namespace. The table supports the same pause,
 filter, follow, and export controls. `:events selected` opens the resource status
 panel. There is no separate watch command.
@@ -463,7 +479,25 @@ content; ordinary Kubernetes RBAC still applies.
 
 Settings live in `$XDG_CONFIG_HOME/kqt/config.yaml`, or
 `~/.config/kqt/config.yaml`. Missing files use defaults and are created when
-preferences are saved. View and namespace are saved automatically, per context.
+preferences are saved. View and namespace selection are saved automatically, per context.
+
+Use `:ns prod-dep,prod-ccp,prod-global,prod-system` to combine specific namespaces
+in one table, including live resources, events and pod metrics. The namespace
+column appears automatically for a multi-namespace selection. Tab completes each
+name in the comma-separated list. Select up to 64 namespaces; spaces and repeated
+names are normalised.
+
+Run `:ns save production` to name the current selection, then `:ns @production`
+to return to it. Groups are saved under the actual kubeconfig context in the
+user's config file, so the same group name can select different namespaces in
+different clusters. The header shows the group name and namespace count.
+
+Each namespace is queried and watched separately, so the combined view works
+with namespace-scoped RBAC. If a namespace is unavailable, usable results remain
+visible with a partial-results warning; previously loaded rows from that namespace
+are retained until a successful refresh. `Ctrl+R` retries. Cluster-scoped resources
+such as nodes are listed once. `:ns -A` or `0` selects all namespaces.
+
 Theme selection, header visibility, inspector format, and chosen layout are also saved. Launch flags
 override saved values. A theme preview is not saved until Enter; Escape cancels it.
 The theme name appears in the header for ten seconds after selection.
@@ -482,6 +516,7 @@ view: pods
 namespace: default
 inspector_format: yaml
 refresh_interval: 2s
+history_limit: 100
 editor: "code --wait"
 download_dir: "~/Downloads/kqt"
 logs:
@@ -493,6 +528,11 @@ logs:
   follow: true
 context_aliases:
   prod: "actual-production-context"
+contexts:
+  actual-production-context:
+    namespace: prod-dep,prod-ccp,prod-global,prod-system
+    namespace_groups:
+      production: [prod-dep, prod-ccp, prod-global, prod-system]
 
 views:
   pods:

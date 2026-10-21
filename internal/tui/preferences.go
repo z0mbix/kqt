@@ -86,6 +86,9 @@ func (s *Settings) savePatch(patch map[string]any) error {
 	if err = decodeConfig(path, output, &check); err != nil {
 		return err
 	}
+	if err = validateHistoryLimit(check.HistoryLimit); err != nil {
+		return err
+	}
 	if _, err = resolveLayouts(check.Layouts); err != nil {
 		return err
 	}
@@ -93,6 +96,9 @@ func (s *Settings) savePatch(patch map[string]any) error {
 		return fmt.Errorf("invalid download_dir: %w", err)
 	}
 	if err = validateContextAliases(check.ContextAliases); err != nil {
+		return err
+	}
+	if err = normalizeNamespacePreferences(&check); err != nil {
 		return err
 	}
 	if err = validateLogPreferences(check.Logs); err != nil {
@@ -185,7 +191,8 @@ func (m *model) saveRoute() {
 	if m.route.resource.ID() == "" || m.contextName == "" || m.backend == nil {
 		return
 	}
-	state := contextState{View: m.route.resource.ID(), Namespace: m.route.namespace, AllNamespaces: m.route.namespace == ""}
+	state := m.settings.Config.Contexts[m.contextName]
+	state.View, state.Namespace, state.AllNamespaces = m.route.resource.ID(), m.route.namespace, m.route.namespace == ""
 	m.settings.Config.Contexts[m.contextName] = state
 	m.settings.Config.View = state.View
 	m.settings.Config.Namespace = state.Namespace

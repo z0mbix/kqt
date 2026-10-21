@@ -1,11 +1,21 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/z0mbix/kqt/internal/kube"
 )
 
-const commandHistoryLimit = 50
+const defaultHistoryLimit = 100
+
+func validateHistoryLimit(limit int) error {
+	if limit < 1 {
+		return fmt.Errorf("history_limit must be a positive integer")
+	}
+	return nil
+}
 
 type historySuccess struct {
 	sequence uint64
@@ -14,7 +24,7 @@ type historySuccess struct {
 
 func (m *model) nextCommandSequence() uint64 {
 	if m.historySuccesses == nil {
-		for _, value := range m.settings.Config.CommandHistory {
+		for _, value := range m.settings.CommandHistory {
 			m.commandSequence++
 			m.historySuccesses = append(m.historySuccesses, historySuccess{m.commandSequence, value})
 		}
@@ -23,14 +33,14 @@ func (m *model) nextCommandSequence() uint64 {
 	return m.commandSequence
 }
 
-func boundedCommandHistory(values []string) []string {
+func boundedCommandHistory(values []string, limit int) []string {
 	var history []string
 	for _, value := range values {
 		if value = strings.TrimSpace(value); value != "" {
 			history = append(history, value)
 		}
 	}
-	return history[max(0, len(history)-commandHistoryLimit):]
+	return history[max(0, len(history)-max(0, limit)):]
 }
 
 func (m *model) rememberCommand(value string) {
@@ -56,18 +66,20 @@ func (m *model) rememberCommandAt(value string, sequence uint64) {
 		}
 		return 0
 	})
-	m.historySuccesses = m.historySuccesses[max(0, len(m.historySuccesses)-commandHistoryLimit):]
+	m.historySuccesses = m.historySuccesses[max(0, len(m.historySuccesses)-m.settings.Config.HistoryLimit):]
 	var history []string
 	for _, item := range m.historySuccesses {
 		history = append(history, item.value)
 	}
-	m.settings.Config.CommandHistory = history
+	m.settings.CommandHistory = history
 	m.commandHistoryIndex = len(history)
-	m.savePreferences(map[string]any{"command_history": history})
+	if err := m.settings.saveCommandHistory(); err != nil {
+		m.settings.historyWarning = "Unable to save command history: " + kube.Safe(err.Error())
+	}
 }
 
 func (m *model) recallCommand(older bool) {
-	history := m.settings.Config.CommandHistory
+	history := m.settings.CommandHistory
 	if len(history) == 0 {
 		return
 	}

@@ -17,7 +17,7 @@ func typeHistoryQuery(m *model, text string) {
 
 func TestReverseHistorySearchCyclesMatchesAndAcceptsWithoutExecuting(t *testing.T) {
 	m := demoModel(t)
-	m.settings.Config.CommandHistory = []string{"theme nord", "layouts", "theme dracula", "ctx demo"}
+	m.settings.CommandHistory = []string{"theme nord", "layouts", "theme dracula", "ctx demo"}
 	m.startInput("command", "draft")
 	originalTheme := m.theme.Name
 	ctrlHistory(m, 'r')
@@ -38,11 +38,11 @@ func TestReverseHistorySearchCyclesMatchesAndAcceptsWithoutExecuting(t *testing.
 		t.Fatal("Ctrl+S did not find newer match")
 	}
 	key(m, "tab")
-	if m.mode != "command" || m.input.Value() != "theme dracula" || m.theme.Name != originalTheme || len(m.settings.Config.CommandHistory) != 4 {
+	if m.mode != "command" || m.input.Value() != "theme dracula" || m.theme.Name != originalTheme || len(m.settings.CommandHistory) != 4 {
 		t.Fatal("accepting match executed or changed history")
 	}
 	key(m, "enter")
-	if m.theme.Name != "dracula" || m.settings.Config.CommandHistory[4] != "theme dracula" {
+	if m.theme.Name != "dracula" || m.settings.CommandHistory[4] != "theme dracula" {
 		t.Fatal("accepted command did not execute on Enter")
 	}
 }
@@ -50,14 +50,14 @@ func TestReverseHistorySearchCyclesMatchesAndAcceptsWithoutExecuting(t *testing.
 func TestReverseHistoryCancelRestoresDraftAndCursorAndMissingMatchDoesNotRun(t *testing.T) {
 	for _, cancel := range []string{"esc", "ctrl+g"} {
 		m := demoModel(t)
-		m.settings.Config.CommandHistory = []string{"theme nord"}
-		before := slices.Clone(m.settings.Config.CommandHistory)
+		m.settings.CommandHistory = []string{"theme nord"}
+		before := slices.Clone(m.settings.CommandHistory)
 		m.startInput("command", "theme dracula")
 		m.input.SetCursor(5)
 		ctrlHistory(m, 'r')
 		typeHistoryQuery(m, "no matching command")
 		key(m, "enter")
-		if m.mode != "history-search" || m.historySearch.index != -1 || !slices.Equal(m.settings.Config.CommandHistory, before) {
+		if m.mode != "history-search" || m.historySearch.index != -1 || !slices.Equal(m.settings.CommandHistory, before) {
 			t.Fatal("missing match ran or changed history")
 		}
 		if cancel == "esc" {
@@ -73,12 +73,12 @@ func TestReverseHistoryCancelRestoresDraftAndCursorAndMissingMatchDoesNotRun(t *
 
 func TestReverseHistoryEnterRunsSelectedCommandAndKeepsRefreshOutsidePrompt(t *testing.T) {
 	m := demoModel(t)
-	m.settings.Config.CommandHistory = []string{"theme nord", "theme dracula"}
+	m.settings.CommandHistory = []string{"theme nord", "theme dracula"}
 	m.startInput("command", "")
 	ctrlHistory(m, 'r')
 	typeHistoryQuery(m, "nord")
 	key(m, "enter")
-	if m.mode != "" || m.theme.Name != "nord" || len(m.settings.Config.CommandHistory) != 3 {
+	if m.mode != "" || m.theme.Name != "nord" || len(m.settings.CommandHistory) != 3 {
 		t.Fatal("Enter did not execute the matching command")
 	}
 	request := m.request
@@ -104,7 +104,7 @@ func TestReverseHistoryUnicodeBackspaceEmptyHistoryAndResize(t *testing.T) {
 		t.Fatal("empty history manufactured a command")
 	}
 	key(m, "esc")
-	m.settings.Config.CommandHistory = []string{"download-dir ~/界", "theme nord"}
+	m.settings.CommandHistory = []string{"download-dir ~/界", "theme nord"}
 	ctrlHistory(m, 'r')
 	typeHistoryQuery(m, "界x")
 	if m.historySearch.index != -1 {

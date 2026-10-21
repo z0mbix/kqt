@@ -31,8 +31,14 @@ def setup_child():
 
 with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
     root=Path(temporary)
+    env=dict(os.environ,TERM='xterm-256color',COLORTERM='truecolor',XDG_CACHE_HOME=str(root/'cache'))
+    history_file=root/'cache'/'kqt'/'history.json'
+    def history():
+        return json.loads(history_file.read_text()) if history_file.exists() else []
     config=root/'config.yaml'
     config.write_text('version: 1\ntheme: catppuccin-mocha\nlayout: classic\n')
+    if args.feature=='command-history':
+        config.write_text(config.read_text()+'command_history: [layouts]\nhistory_limit: 5\n')
     if args.feature=='debug':
         assert not args.kubeconfig, 'debug PTY workflow uses only the simulated backend'
         config.write_text(config.read_text()+'''debug:
@@ -51,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
     launch=[str(args.binary.resolve()),'--config',str(config),'-n','kqt-test' if args.kubeconfig else 'default']
     launch += ['--kubeconfig',str(args.kubeconfig.resolve())] if args.kubeconfig else ['--demo']
     if args.feature=='access': launch += ['--read-only']
-    process=subprocess.Popen([sys.executable,'-c',wrapper,*launch],stdin=slave,stdout=slave,stderr=slave,preexec_fn=setup_child,env=dict(os.environ,TERM='xterm-256color',COLORTERM='truecolor'))
+    process=subprocess.Popen([sys.executable,'-c',wrapper,*launch],stdin=slave,stdout=slave,stderr=slave,preexec_fn=setup_child,env=env)
     raw=bytearray()
     resize_events=[(0,width,height)]
     def pump(duration=0.15):
@@ -75,7 +81,49 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
         raise AssertionError(value+' not on screen:\n'+current)
     try:
         expect('pods [5]' if args.kubeconfig else 'pods [12]')
-        if args.feature=='debug-setup':
+        if args.feature=='namespace-scopes':
+            assert not args.kubeconfig, 'namespace workflow uses the isolated demo backend'
+            send(':ns default, platform,default\r'); expect('pods [26]'); expect('Namespaces: 2 selected'); expect('NAMESPACE')
+            send(':ns save production\r'); expect('Saved namespace group production'); expect('Namespaces: production (2)')
+            text=config.read_text()
+            assert 'namespace: default,platform' in text and 'namespace_groups:' in text and 'production:' in text
+            send(':ns default\r'); expect('pods [12]')
+            assert 'NAMESPACE' not in screen(raw,width,height,resize_events), 'single scope retained namespace column'
+            send(':ns @pro\t'); expect(':ns @production'); send('\r'); expect('pods [26]')
+            before=config.read_text()
+            send(':ns default,\r'); expect('Invalid namespace selection')
+            assert config.read_text()==before, 'invalid namespace selection changed config/history'
+            send(':columns name,status\r'); expect('NAMESPACE')
+            send(':nodes\r'); expect('nodes [3]'); send('\r'); expect('Namespaces: production (2)')
+            send(':pods\r'); expect('pods [26]'); send('m'); expect('CPU'); expect('Mi')
+            send(':events\r'); expect('DemoHeartbeat')
+            end=time.monotonic()+5
+            while time.monotonic()<end:
+                current=screen(raw,width,height,resize_events)
+                if 'platform' in current and 'default' in current: break
+                pump()
+            assert 'platform' in current and 'default' in current, 'combined live events lost a namespace'
+            target=root/'events.log'
+            send('o'); expect('Save to:'); send('\x15'+str(target)+'\r'); expect('Events saved to')
+            exported=target.read_text()
+            assert '[default/Pod/' in exported and '[platform/Pod/' in exported, 'event export omitted a selected namespace'
+            send(':pods\r'); expect('pods [26]')
+            send('q')
+            end=time.monotonic()+5
+            while b'__kqt_exit__0' not in raw and time.monotonic()<end: pump()
+            assert b'__kqt_exit__0' in raw and original==termios.tcgetattr(slave), 'first session did not restore terminal'
+            send('\n'); process.wait(timeout=5)
+            os.close(master); os.close(slave)
+            master,slave=os.openpty()
+            fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
+            original=termios.tcgetattr(slave)
+            raw.clear(); resize_events=[(0,width,height)]
+            # Omit -n on restart so saved scope is exercised.
+            launch=[str(args.binary.resolve()),'--config',str(config),'--demo']
+            process=subprocess.Popen([sys.executable,'-c',wrapper,*launch],stdin=slave,stdout=slave,stderr=slave,preexec_fn=setup_child,env=env)
+            expect('pods [26]'); expect('Namespaces: production (2)')
+            send(':ns default\r'); expect('pods [12]'); send(':ns @production\r'); expect('pods [26]')
+        elif args.feature=='debug-setup':
             assert not args.kubeconfig, 'debug setup uses only the simulated backend'
             before=config.read_text()
             send('B'); expect('Debug image · first use'); expect('Use my own image'); expect('Use BusyBox')
@@ -88,13 +136,13 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             send('\x01\x0b'+image+'\r'); expect('Start debug container'); expect('Enter to start')
             text=config.read_text()
             assert image in text and 'default_profile: default' in text, 'debug image was not saved'
-            assert 'command_history' not in text, 'setup prematurely saved the debug command'
+            assert not history(), 'setup prematurely saved the debug command'
             send('\x1b'); send('B'); expect('Start debug container')
             assert 'Which image should kqt use' not in screen(raw,width,height,resize_events), 'saved image was not reused'
             send('\x1b')
         elif args.feature=='debug':
             send(':debug typo\r'); expect('Unknown debug profile')
-            assert 'debug typo' not in config.read_text(), 'unknown debug profile entered history'
+            assert 'debug typo' not in history(), 'unknown debug profile entered history'
             send('B'); expect('Start debug container'); expect('Container: web')
             assert 'Confirm:' not in screen(raw,width,height,resize_events), 'pod name entry still required'
             send('c'); expect('<pod network>'); send('\x1b'); expect('Start debug container')
@@ -105,18 +153,25 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             expect('registry.kqt.invalid/debug:approved')
             send('\r'); expect('Demo debug terminal')
             send('\x1d'); expect('Disconnected; container may keep running')
-            assert 'debug approved' in config.read_text(), 'successful debug command not saved'
+            assert 'debug approved' in history(), 'successful debug command not saved'
             send(':debug attach\r'); expect('Demo debug terminal')
             send('exit\r'); expect('Debug session ended')
             send(':debug attach\r'); expect('Debug container failed'); expect('terminated')
             send('\x1b'); expect('pods [12]')
         elif args.feature=='command-history':
+            assert history()==['layouts'], 'legacy config history was not migrated at startup'
+            assert 'command_history' not in config.read_text(), 'migration retained legacy history in config'
+            assert history_file.stat().st_mode & 0o777==0o600, 'cached history is not private'
             send(':theme nord\r'); send(':theme dracula\r')
             for value, error in [('themse','unknown resource'),('theme missing','Unknown theme'),('logs typo','Use :logs'),('pods typo','do not take arguments')]:
                 send(':'+value+'\r'); expect(error)
-            text=config.read_text()
+            text=history()
             assert 'theme nord' in text and 'theme dracula' in text, 'successful commands were not saved'
             assert 'themse' not in text and 'theme missing' not in text and 'logs typo' not in text and 'pods typo' not in text, 'failed command entered history'
+            assert 'command_history' not in config.read_text(), 'history was written back to config'
+            before=config.read_bytes()
+            send(':help\r'); expect('Help'); send('\x1b')
+            assert config.read_bytes()==before and 'help' in history(), 'history-only command rewrote config'
             send(':draft\x12theme'); expect('(reverse-i-search)'); expect('Match: :theme dracula')
             send('\x12'); expect('Match: :theme nord')
             send('\x13'); expect('Match: :theme dracula')
@@ -126,12 +181,13 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             send(':\x12nord\r'); expect('· nord')
             send(':deploy\r'); expect('deployments.apps [1]')
             send(':scale 3\r'); expect('Confirm scale'); send('\x1b')
-            assert 'scale 3' not in config.read_text(), 'cancelled mutation entered history'
+            assert 'scale 3' not in history(), 'cancelled mutation entered history'
             destination=root/'history-export.json'
             command=':export json '+json.dumps(str(destination))+'\r'
-            send(command); expect('Manifest saved to'); before=config.read_text()
+            send(command); expect('Manifest saved to'); before=history_file.read_bytes()
             send(command); expect('Unable to save manifest')
-            assert config.read_text()==before, 'failed export changed saved command history'
+            assert history_file.read_bytes()==before, 'failed export changed saved command history'
+            assert len(history())==5 and 'layouts' not in history(), 'configured history limit did not evict the oldest commands'
         elif args.feature=='contexts':
             send(':alias prod\r'); expect('Context: prod'); expect('Context alias saved:')
             assert 'prod: demo' in config.read_text(), 'alias was not saved'
@@ -414,7 +470,7 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             send('z'); expect('Context:'); send('z'); expect('Header hidden'); send('\x1b')
             send('S'); expect('Status'); send('z'); expect('Context:'); send('z'); expect('Header hidden'); send('\x1b')
             send(':header typo\r'); expect('Use :header')
-            assert 'header typo' not in config.read_text(), 'invalid command entered history'
+            assert 'header typo' not in history(), 'invalid command entered history'
             send('q')
             end=time.monotonic()+5
             while b'__kqt_exit__0' not in raw and time.monotonic()<end: pump()
@@ -425,7 +481,7 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
             original=termios.tcgetattr(slave)
             raw.clear(); resize_events=[(0,width,height)]
-            process=subprocess.Popen([sys.executable,'-c',wrapper,*launch],stdin=slave,stdout=slave,stderr=slave,preexec_fn=setup_child,env=dict(os.environ,TERM='xterm-256color',COLORTERM='truecolor'))
+            process=subprocess.Popen([sys.executable,'-c',wrapper,*launch],stdin=slave,stdout=slave,stderr=slave,preexec_fn=setup_child,env=env)
             expect('pods [12]')
             assert 'Context:' not in screen(raw,width,height,resize_events), 'restart lost hidden-header preference'
             send(':header on\r'); expect('Context:')

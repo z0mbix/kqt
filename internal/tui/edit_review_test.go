@@ -66,7 +66,7 @@ func TestEditReviewDiscardAndSecretRedaction(t *testing.T) {
 	openEditReview(t, m, b)
 	m.addHistoryExecution("edit", "edit", "", m.editToken)
 	m.editReviewKey(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.editReview != nil || m.editBuffer != nil || len(m.commandExecutions) != 0 || len(m.settings.Config.CommandHistory) != 0 {
+	if m.editReview != nil || m.editBuffer != nil || len(m.commandExecutions) != 0 || len(m.settings.CommandHistory) != 0 {
 		t.Fatal("discard retained edit state/history")
 	}
 	before := b.editable

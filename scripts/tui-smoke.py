@@ -134,7 +134,7 @@ print('__KQT_EDITOR_STARTED__',flush=True)
         master, slave = os.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', height, width, 0, 0))
         original = termios.tcgetattr(slave)
-        env = dict(os.environ, TERM='xterm-256color', COLORTERM='truecolor', KQT_THEME='')
+        env = dict(os.environ, TERM='xterm-256color', COLORTERM='truecolor', KQT_THEME='', XDG_CACHE_HOME=str(Path(directory)/'cache'))
         env.pop('NO_COLOR', None)
         wrapper = '''import subprocess,sys,signal
 child = subprocess.Popen(sys.argv[1:])

@@ -16,6 +16,7 @@ import (
 func demoModel(t *testing.T) *model {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	s, err := LoadSettings("")
 	if err != nil {
 		t.Fatal(err)
@@ -125,6 +126,7 @@ func TestContextAndRouteChangesClearData(t *testing.T) {
 
 func TestUnknownInitialViewDoesNotFallBack(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	s, err := LoadSettings("")
 	if err != nil {
 		t.Fatal(err)

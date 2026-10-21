@@ -56,9 +56,23 @@ func (m *model) openAccess(arg string) tea.Cmd {
 	}
 	var requests []kube.AccessRequest
 	var labels []string
+	namespaces, err := kube.NamespaceNames(ns)
+	if err != nil {
+		m.notice = "Invalid namespace selection: " + kube.Safe(err.Error())
+		return nil
+	}
+	if len(namespaces) == 0 {
+		namespaces = []string{""}
+	}
 	add := func(label, verb, subresource string, resource kube.Resource, targetName string) {
-		requests = append(requests, kube.AccessRequest{Resource: resource, Namespace: ns, Name: targetName, Verb: verb, Subresource: subresource})
-		labels = append(labels, label)
+		for _, namespace := range namespaces {
+			requests = append(requests, kube.AccessRequest{Resource: resource, Namespace: namespace, Name: targetName, Verb: verb, Subresource: subresource})
+			text := label
+			if len(namespaces) > 1 {
+				text = namespace + ": " + label
+			}
+			labels = append(labels, text)
+		}
 	}
 	if arg != "" {
 		fields := strings.Fields(arg)

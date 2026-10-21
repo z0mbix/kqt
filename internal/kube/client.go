@@ -171,6 +171,16 @@ func (c *Client) Resources(ctx context.Context) ([]Resource, error) {
 	return Merge(result), err
 }
 func (c *Client) List(ctx context.Context, q Query) ([]unstructured.Unstructured, error) {
+	if q.Resource.Namespaced {
+		names, err := NamespaceNames(q.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		if len(names) > 1 {
+			return listNamespaces(ctx, q, names, c.List)
+		}
+		q.Namespace = strings.Join(names, ",")
+	}
 	var client dynamic.ResourceInterface = c.dynamic.Resource(q.Resource.GVR)
 	if q.Resource.Namespaced {
 		client = c.dynamic.Resource(q.Resource.GVR).Namespace(q.Namespace)
