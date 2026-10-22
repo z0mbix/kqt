@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-var version = "0.6.0-dev"
+var version = "0.6.1-dev"
 
 func command() *cobra.Command {
 	var o tui.Options

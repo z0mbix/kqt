@@ -251,10 +251,26 @@ An unavailable namespace does not stop healthy streams. Partial-results warnings
 remain visible, and previously loaded rows from failed namespaces are retained
 until refreshed successfully. Node-to-pod navigation preserves the selected scope.
 
-`:ns save NAME` stores an explicit selection under the actual kubeconfig context;
-`:ns @NAME` selects it. Groups and the current namespace selection survive normal
-route/preference saves. Multi-namespace tables always identify each row's
-namespace, including when a custom column configuration omits that column.
+`:ns @save NAME` stores an explicit selection under the actual kubeconfig context;
+`:ns save NAME` is a compatibility alias and `:ns @NAME` selects a saved group.
+Bare names select literal namespaces; all-namespace shortcuts keep their meaning.
+`:ns @` opens the fuzzy group manager with select/save/edit/rename/delete actions.
+Management verbs require arguments, so a group named `edit` remains selectable
+as `:ns @edit`.
+
+`:ns @edit NAME` opens a prefilled membership form, `:ns @rename OLD NEW` renames
+without overwriting another group, and `:ns @delete NAME` opens a compact,
+default-No confirmation. Manager shortcuts use Ctrl+N/E/R/D so ordinary typing
+continues to search. Forms capture the context, generation and members, and
+reject submission if the connection changes. Cancellation, invalid input and
+failed writes never enter command history; an edit/delete is remembered only
+after a successful save. Targeted atomic config patches preserve other groups,
+contexts and settings. Group mutations never change the current namespace scope
+or make Kubernetes mutations; reselect a group to use its new membership.
+
+Groups and the current namespace selection survive normal route/preference saves.
+Multi-namespace tables always identify each row's namespace, including when a
+custom column configuration omits that column.
 
 ## Cached command history
 

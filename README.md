@@ -132,7 +132,9 @@ Escape outside search to close it. Reopening help starts with the full view.
 | `n`, `:ns` | Namespace table; Enter selects one |
 | `:ns apps`, `:ns -A`, `0` | Set namespace / all namespaces |
 | `:ns apps,platform` | List resources from several namespaces |
-| `:ns save production`, `:ns @production` | Save / select a namespace group for this context |
+| `:ns @` | Search and manage saved namespace groups for this context |
+| `:ns @save production`, `:ns @production` | Save / select a namespace group |
+| `:ns @edit NAME`, `:ns @rename OLD NEW`, `:ns @delete NAME` | Edit, rename or delete a saved group |
 | `c`, `:ctx` | Search and switch kubeconfig contexts |
 | `r`, `:resources` | Search APIs and discovered custom resources |
 | `Enter` | Workload/service/node → pods; otherwise describe |
@@ -194,8 +196,9 @@ the open logs/status view. The status and shortcut bars remain available. Press
 `z` again to restore it, or set `header_visible: false` in your config.
 
 Completion covers commands, resource names and aliases, theme/layout names,
-contexts, known namespaces, and inspector/sort options. Tab only fills the
-prompt; Enter executes. Printable navigation keys stay text in input fields.
+contexts, known namespaces, saved namespace groups and their `@` actions, and
+inspector/sort options. Tab only fills the prompt; Enter executes. Printable
+navigation keys stay text in input fields.
 Pickers use arrows or `Ctrl+J/K` while you type to search.
 
 In the command prompt, Up recalls older commands and Down recalls newer ones.
@@ -487,10 +490,51 @@ column appears automatically for a multi-namespace selection. Tab completes each
 name in the comma-separated list. Select up to 64 namespaces; spaces and repeated
 names are normalised.
 
-Run `:ns save production` to name the current selection, then `:ns @production`
-to return to it. Groups are saved under the actual kubeconfig context in the
-user's config file, so the same group name can select different namespaces in
-different clusters. The header shows the group name and namespace count.
+Run `:ns @save production` to name the current selection, then `:ns @production`
+to return to it. `:ns save production` remains a compatibility alias. Groups are
+saved under the actual kubeconfig context in the user's config file, so the same
+group name can select different namespaces in different clusters. The header
+shows the group name and namespace count.
+
+The `@` prefix distinguishes groups from literal namespaces: `:ns groups` selects
+a namespace named `groups`, while `:ns @groups` selects the saved group `groups`.
+Even group names such as `save` and `edit` work: `:ns @save` or `:ns @edit`
+selects that group; a space and arguments introduce a management command.
+Tab after `:ns @` cycles through actions and saved groups; Shift+Tab cycles back.
+For example, `:ns @ed<Tab>` fills `:ns @edit `, then `dev<Tab>` fills the saved
+group name `development`. With `:ns @edit <Tab>`, no prefix is needed: Tab cycles
+through all saved groups in the current context, and Shift+Tab cycles back.
+After completing a unique action, pressing Tab again starts its group cycle.
+New names for saving or renaming are typed freely. Enter executes the command.
+
+Open `:ns @` for a fuzzy-searchable group manager showing names, membership and
+the active selection. Type to search, use arrows or Ctrl+J/K to move, and Enter
+to select. Its management shortcuts are:
+
+| Key | Action |
+|---|---|
+| `Ctrl+N` | Save the current namespace selection under a name |
+| `Ctrl+E` | Edit the selected group's prefilled comma-separated namespace list |
+| `Ctrl+R` | Rename the selected group |
+| `Ctrl+D` | Delete the selected group after a compact Yes/No confirmation |
+| `Esc` | Close the manager or cancel an edit |
+
+The same actions are available as commands:
+
+```text
+:ns @save development
+:ns @edit development
+:ns @rename development dev-team
+:ns @delete dev-team
+```
+
+Enter saves an edit; Escape cancels it. Saving under an existing name replaces
+its membership; renaming refuses an existing destination. Groups require explicit
+namespace names, so select specific namespaces before saving (not `:ns -A`).
+Editing or saving a definition does not change the current filter: use
+`:ns @NAME` to apply it. Renaming or deleting also leaves the selection intact.
+Deleting a group only removes the saved definition, never Kubernetes namespaces
+or resources. Deletion defaults to **No**.
 
 Each namespace is queried and watched separately, so the combined view works
 with namespace-scoped RBAC. If a namespace is unavailable, usable results remain

@@ -19,14 +19,23 @@ func (m *model) modalBounds() paneBounds {
 	if m.smallDeleteModal() {
 		w, h = min(66, w), min(12, h)
 	}
+	if m.mode == "namespace-group" {
+		w, h = min(76, w), min(12, h)
+		if m.namespaceGroup.action == "delete" {
+			w = min(66, w)
+		}
+	}
 	return paneBounds{(m.width - w) / 2, (m.height - h) / 2, w, h}
 }
 func (m *model) smallDeleteModal() bool {
 	return m.actionPlan != nil && m.actionPlan.Action == "delete" && (m.mode == "delete-confirm" || m.mode == "action-running")
 }
 func (m *model) deleteButtons() string {
+	return m.confirmationButtons(m.deleteYes)
+}
+func (m *model) confirmationButtons(selectedYes bool) string {
 	no, yes := "  No  ", "  Yes  "
-	if m.deleteYes {
+	if selectedYes {
 		yes = m.theme.style("focus").Bold(true).Reverse(true).Render(yes)
 	} else {
 		no = m.theme.style("focus").Bold(true).Reverse(true).Render(no)

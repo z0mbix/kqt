@@ -67,6 +67,9 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.close()
 		return tea.Quit
 	}
+	if m.mode == "namespace-group" {
+		return m.namespaceGroupKey(msg)
+	}
 	if m.mode == "history-search" {
 		return m.historySearchKey(msg)
 	}
@@ -854,6 +857,8 @@ func (m *model) openPicker(kind string) tea.Cmd {
 	m.choices = nil
 	m.pickerIndex = 0
 	switch kind {
+	case "namespace-groups":
+		m.choices = m.namespaceGroupChoices()
 	case "inspector-position":
 		m.beginInspectorPreview()
 		m.choices = []choice{{"right", "beside the resource list"}, {"bottom", "below the resource list"}}
@@ -964,6 +969,11 @@ func (m *model) filterChoices() {
 	m.previewInspectorPosition()
 }
 func (m *model) pickerKey(msg tea.KeyPressMsg) tea.Cmd {
+	if m.pickerKind == "namespace-groups" {
+		if cmd, handled := m.namespaceGroupPickerKey(msg); handled {
+			return cmd
+		}
+	}
 	switch msg.String() {
 	case "ctrl+r":
 		if m.pickerKind == "rollouts" {
@@ -1026,6 +1036,8 @@ func (m *model) pickerKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.mode = ""
 		m.input.Blur()
 		switch m.pickerKind {
+		case "namespace-groups":
+			return m.namespaceCommand("@" + c.name)
 		case "debug-image-source":
 			if c.name == "Use BusyBox" {
 				return m.useBusyBoxDebugImage()
@@ -1121,8 +1133,12 @@ Explore
   /                  Fuzzy search: web0003 matches web-7c9f6d8b5-0003
   n / :ns            Browse namespaces; Enter selects one
   :ns NAME[,NAME]    Select namespaces; :ns -A or 0 selects all
-  :ns save NAME      Save current namespaces as a per-context group
+  :ns @              Search/manage saved namespace groups for this context
   :ns @NAME          Select a saved namespace group
+  :ns @save NAME     Save/replace a group (:ns save NAME also works)
+  :ns @edit NAME     Edit a prefilled comma-separated namespace list
+  :ns @rename OLD NEW  Rename a saved group without overwriting another
+  :ns @delete NAME   Remove a saved group; compact Yes/No confirmation
   c / :ctx           Search kubeconfig contexts (session only)
   :alias NAME [CTX]  Save a short context name; :unalias NAME removes it
   r / :resources     Search discovered APIs / CRDs
@@ -1199,6 +1215,17 @@ const helpNotesText = `Preferences
 View and namespace are saved per context in ~/.config/kqt/config.yaml.
 Themes, layouts and inspector format are saved when applied.
 The theme name is shown for ten seconds after selection.
+
+Namespace groups
+:ns NAME selects a literal namespace, including groups, save, edit or delete.
+:ns @ opens the fuzzy group manager; :ns @NAME selects a saved group.
+Tab / Shift+Tab cycles @ actions and groups. :ns @ed<Tab> fills @edit;
+after the space, Tab cycles saved group names (no prefix needed). Enter executes.
+In the manager, Ctrl+N saves the current selection, Ctrl+E edits,
+Ctrl+R renames and Ctrl+D deletes. Enter selects; Esc closes or cancels.
+Groups belong to the current kubeconfig context. Edit/save changes a saved
+definition; select it again to apply. Rename/delete keeps the current selection.
+Deleting a group never deletes Kubernetes namespaces or resources.
 
 Security
 Kubeconfig is never modified. Secret values are hidden by default; x reveals

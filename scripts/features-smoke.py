@@ -123,6 +123,59 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             process=subprocess.Popen([sys.executable,'-c',wrapper,*launch],stdin=slave,stdout=slave,stderr=slave,preexec_fn=setup_child,env=env)
             expect('pods [26]'); expect('Namespaces: production (2)')
             send(':ns default\r'); expect('pods [12]'); send(':ns @production\r'); expect('pods [26]')
+        elif args.feature=='namespace-groups':
+            assert not args.kubeconfig, 'group management uses the isolated demo backend'
+            send(':ns groups\r'); expect('pods [0]'); expect('Namespace: groups')
+            send(':ns default,platform,kube-system\r'); expect('pods [26]')
+            send(':ns @save development\r'); expect('Saved namespace group development')
+            assert 'ns @save development' in history(), 'successful save was not remembered'
+            send(':ns @save production\r'); expect('Saved namespace group production')
+            before=config.read_bytes(); prior_history=history()
+            send(':ns @edit \t'); expect(':ns @edit development')
+            send('\t'); expect(':ns @edit production')
+            send('\t'); expect(':ns @edit development')
+            send('\x1b[Z'); expect(':ns @edit production'); send('\x1b')
+            send(':ns @ed\t'); expect(':ns @edit ')
+            send('\t'); expect(':ns @edit development'); send('\x1b')
+            assert config.read_bytes()==before and history()==prior_history, 'completion executed a group command'
+            send(':ns @delete production\r'); expect('Delete namespace group'); send('y'); expect('Deleted namespace group production')
+            send(':ns @\t'); expect(':ns @delete ')
+            assert 'Delete namespace group' not in screen(raw,width,height,resize_events), 'Tab executed a group action'
+            send('\x1b[Z'); expect(':ns @save '); send('\x1b')
+            send(':ns @e\t'); expect(':ns @edit ')
+            send('dev\t'); expect(':ns @edit development'); send('\x1b')
+            send(':namespace @ren\t'); expect(':namespace @rename ')
+            send('dev\t'); expect(':namespace @rename development'); send('\x1b')
+            send(':ns @\r'); expect('Namespace groups'); expect('Ctrl+N: save current'); expect('@development')
+            send('dvlpmnt'); expect('@development')
+            send('\x05'); expect('Edit namespace group'); expect('Namespaces: default,platform,kube-system')
+            before=config.read_bytes()
+            send('\x15default,\r'); expect('Enter explicit comma-separated')
+            assert config.read_bytes()==before, 'invalid membership changed config'
+            send('\x1b'); expect('Namespace groups'); expect('/ dvlpmnt')
+            send('\x05'); expect('Edit namespace group')
+            send('\x15default,kube-system\r'); expect('Namespace groups'); expect('Saved namespace group development')
+            send('\x1b'); expect('pods [26]')
+            send(':ns @development\r'); expect('pods [12]')
+            send(':ns @rename development dev-team\r'); expect('Renamed namespace group development to dev-team')
+            send(':ns @edit dev-team\r'); expect('Namespaces: default,kube-system')
+            assert 'ns @edit dev-team' not in history(), 'unconfirmed edit entered history'
+            send('\x15default,platform\r'); expect('Saved namespace group dev-team'); expect('pods [12]')
+            assert 'ns @edit dev-team' in history(), 'successful edit was not remembered'
+            send(':ns @\r'); expect('@dev-team'); send('\x12'); expect('Rename namespace group')
+            send('\x15development\r'); expect('Namespace groups'); expect('@development')
+            send('\x04'); expect('Delete namespace group'); expect('No'); expect('Yes')
+            before=config.read_bytes(); send('\r'); expect('Namespace groups'); expect('@development')
+            assert config.read_bytes()==before, 'default No deleted the group'
+            send('\x1b'); send(':ns @delete development\r'); expect('Delete namespace group')
+            assert 'ns @delete development' not in history(), 'unconfirmed deletion entered history'
+            send('y'); expect('Deleted namespace group development'); expect('pods [12]')
+            assert 'ns @delete development' in history(), 'successful deletion was not remembered'
+            send(':ns @\r'); expect('No saved groups')
+            send('\x0e'); expect('Save namespace group'); send('copy\r'); expect('Namespace groups'); expect('@copy')
+            send('\x04'); expect('Delete namespace group'); send('y'); expect('No saved groups')
+            send('\x1b'); send('?'); expect('Help'); send('/namespace groups\r'); expect(':ns @'); expect('Ctrl+N')
+            send('\x1b')
         elif args.feature=='debug-setup':
             assert not args.kubeconfig, 'debug setup uses only the simulated backend'
             before=config.read_text()

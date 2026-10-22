@@ -39,27 +39,14 @@ func (m *model) namespaceCommand(arg string) tea.Cmd {
 		return m.changeResource("namespaces", true)
 	}
 	if name, save := strings.CutPrefix(arg, "save "); save {
-		name = strings.TrimSpace(name)
-		names, err := kube.NamespaceNames(m.route.namespace)
-		if !validName(name) || err != nil || len(names) == 0 || m.contextName == "" {
-			m.notice = "Use :ns save NAME after selecting explicit namespaces"
-			return nil
-		}
-		patch := map[string]any{"contexts": map[string]any{m.contextName: map[string]any{"namespace_groups": map[string]any{name: names}}}}
-		if err := m.settings.savePatch(patch); err != nil {
-			m.commandConfigError = true
-			m.notice = "Unable to save namespace group: " + kube.Safe(err.Error())
-			return nil
-		}
-		state := m.settings.Config.Contexts[m.contextName]
-		state.NamespaceGroups = maps.Clone(state.NamespaceGroups)
-		if state.NamespaceGroups == nil {
-			state.NamespaceGroups = map[string][]string{}
-		}
-		state.NamespaceGroups[name] = names
-		m.settings.Config.Contexts[m.contextName] = state
-		m.notice = "Saved namespace group " + name
+		m.saveCurrentNamespaceGroup(strings.TrimSpace(name))
 		return nil
+	}
+	if arg == "@" {
+		return m.openPicker("namespace-groups")
+	}
+	if strings.HasPrefix(arg, "@") && strings.Contains(arg, " ") {
+		return m.namespaceGroupCommand(arg)
 	}
 	all := arg == "-A" || arg == "all" || arg == "*"
 	if name, group := strings.CutPrefix(arg, "@"); group {
@@ -102,11 +89,30 @@ func (m *model) namespaceLabel() (string, string) {
 func (m *model) namespaceCompletions(arg string) []string {
 	groups := m.settings.Config.Contexts[m.contextName].NamespaceGroups
 	var names []string
-	if !strings.Contains(arg, ",") {
-		names = []string{"-A", "all", "save "}
-		for group := range groups {
-			names = append(names, "@"+group, "save "+group)
+	for _, action := range []string{"@save ", "@edit ", "@rename ", "@delete ", "save "} {
+		if strings.HasPrefix(arg, action) {
+			// The action has been chosen: only its group argument belongs in
+			// this cycle, with no empty action-only candidate to stop on.
+			for group := range groups {
+				names = append(names, action+group)
+			}
+			return names
 		}
+	}
+	if !strings.Contains(arg, ",") {
+		actions := []string{"@save ", "@edit ", "@rename ", "@delete "}
+		names = append([]string{"-A", "all", "save "}, actions...)
+		// Once @ has been typed, Tab should visibly complete an action/group,
+		// rather than selecting the identical manager command first.
+		if arg != "@" {
+			names = append(names, "@")
+		}
+		for group := range groups {
+			names = append(names, "@"+group)
+		}
+	}
+	if strings.HasPrefix(arg, "@") || strings.HasPrefix(arg, "save ") {
+		return names
 	}
 	known, _ := kube.NamespaceNames(m.route.namespace)
 	for _, values := range groups {

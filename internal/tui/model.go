@@ -89,6 +89,7 @@ type logsMsg struct {
 }
 
 type model struct {
+	namespaceGroup                           *namespaceGroupForm
 	deleteYes                                bool
 	debug                                    *debugState
 	debugToken                               uint64
@@ -930,6 +931,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m, m.key(v)
 	case tea.MouseClickMsg:
+		if m.mode == "namespace-group" {
+			return m, m.namespaceGroupMouse(v)
+		}
 		if m.mode == "delete-confirm" {
 			return m, m.deleteMouse(v)
 		}
@@ -951,9 +955,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == "help-search" {
 			return m, m.updateHelpSearch(msg)
 		}
-		if m.mode == "command" || m.mode == "history-search" || m.mode == "filter" || m.mode == "picker" || m.showingLogs() && m.mode != "logs" || m.mode == "event-search" || m.mode == "event-save" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.mode == "action-confirm" || m.mode == "debug-image" {
+		if m.mode == "command" || m.mode == "history-search" || m.mode == "filter" || m.mode == "picker" || m.mode == "namespace-group" && m.namespaceGroup.action != "delete" || m.showingLogs() && m.mode != "logs" || m.mode == "event-search" || m.mode == "event-save" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.mode == "action-confirm" || m.mode == "debug-image" {
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
+			if m.mode == "picker" && m.pickerKind == "namespace-groups" {
+				m.filterChoices()
+			}
 			return m, cmd
 		}
 	}

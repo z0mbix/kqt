@@ -39,6 +39,7 @@ jobs:
       - run: python3 scripts/features-smoke.py --feature rollouts
       - run: python3 scripts/features-smoke.py --feature contexts
       - run: python3 scripts/features-smoke.py --feature namespace-scopes
+      - run: python3 scripts/features-smoke.py --feature namespace-groups
       - run: python3 scripts/features-smoke.py --feature command-history
       - run: python3 scripts/features-smoke.py --feature debug
       - run: python3 scripts/features-smoke.py --feature debug-setup

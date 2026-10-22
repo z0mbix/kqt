@@ -128,4 +128,12 @@ func (m *model) completeCommand(reverse bool) {
 	c.value = c.matches[c.index]
 	m.input.SetValue(c.value)
 	m.input.CursorEnd()
+	// A unique namespace action is complete. The next Tab starts a new cycle
+	// for its group argument; ambiguous action/group cycles stay reversible.
+	if len(c.matches) == 1 {
+		word, arg, _ := strings.Cut(c.value, " ")
+		if (word == "ns" || word == "namespace") && slices.Contains([]string{"@save ", "@edit ", "@rename ", "@delete ", "save "}, arg) {
+			*c = completionState{}
+		}
+	}
 }

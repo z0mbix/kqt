@@ -846,3 +846,28 @@ history-only commands. These scenarios run in CI and `just smoke`.
 The full local `just smoke` suite passed before publication, including classic,
 inspector and bottom-layout restart checks, operator workflows and every feature
 scenario.
+
+## v0.6.1 saved namespace group management
+
+Model tests cover YAML/TOML save, edit, rename and delete persistence, preserved
+unrelated settings/groups and context isolation. Editing retains the active
+namespace selection until the group is selected again. Invalid input, cancelled
+forms, failed config writes, rename conflicts and stale-context confirmations
+cannot change saved membership or add unsuccessful commands to history.
+Default-No deletion, mouse button bounds and compact centred forms are checked
+at 40x12, 80x24 and 180x48. Literal namespaces and groups named `groups`, `save`,
+`edit`, `rename` and `delete` keep their distinct command meanings.
+
+Completion tests exercise actual key dispatch, action/group separation, forward
+and reverse cycling, wraparound, empty argument completion after `:ns @edit `,
+unique-action handoff, current-context group names and the compatibility save
+alias. Completion fills the prompt without executing commands or saving history.
+
+Go race tests, vet and all fifteen Python tests passed. The isolated group-manager
+terminal scenario covers fuzzy search, save/edit/rename/delete, validation,
+cancellation, default-No deletion, help discovery, Tab/Shift+Tab argument cycling
+and unique-action handoff. The namespace-selection restart scenario also passed.
+The new group-manager scenario runs in CI and `just smoke`.
+
+The full local `just smoke` suite passed before publication, including all three
+layout/restart checks, operator workflows and every feature scenario.

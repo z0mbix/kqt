@@ -312,7 +312,10 @@ view: pods
 namespace: default
 all_namespaces: false
 # Select several with :ns prod-dep,prod-ccp,prod-global,prod-system
-# :ns save production saves a group; :ns @production selects it later.
+# :ns @save production saves a group; :ns @production selects it later.
+# :ns @ opens the group manager (search, select, save, edit, rename, delete).
+# :ns @edit NAME, :ns @rename OLD NEW, :ns @delete NAME manage definitions.
+# :ns save NAME remains a compatibility alias. :ns NAME is a literal namespace.
 # Groups belong to actual kubeconfig contexts, not their display aliases:
 # contexts:
 #   my-work-context:

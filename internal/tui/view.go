@@ -71,6 +71,10 @@ func (m *model) resize() {
 	if m.mode == "picker" {
 		m.input.SetWidth(max(1, m.modalBounds().width-6))
 	}
+	if m.mode == "namespace-group" {
+		m.input.SetWidth(max(1, m.modalBounds().width-4-ansi.StringWidth(m.input.Prompt)))
+		m.input.SetCursor(m.input.Position())
+	}
 	panelWidth, panelHeight := m.width-6, m.height-6
 	if m.smallDeleteModal() {
 		b := m.modalBounds()
@@ -294,10 +298,16 @@ func (m *model) pickerView(width, height int) string {
 	var lines []string
 	lines = append(lines, fit(m.input.View(), width-2), "")
 	capacity := max(1, height-6)
+	if m.pickerKind == "namespace-groups" {
+		capacity = max(1, height-8)
+	}
 	start := min(max(0, m.pickerIndex-capacity+1), max(0, len(m.matches)-capacity))
 	for i := start; i < min(len(m.matches), start+capacity); i++ {
 		c := m.matches[i]
 		label := kube.Safe(c.name) + " · " + kube.Safe(c.description)
+		if m.pickerKind == "namespace-groups" {
+			label = "@" + label
+		}
 		if m.pickerKind == "relations" {
 			label = kube.Safe(c.description)
 		}
@@ -309,7 +319,11 @@ func (m *model) pickerView(width, height int) string {
 		lines = append(lines, text)
 	}
 	if len(m.matches) == 0 {
-		lines = append(lines, "No matches")
+		if m.pickerKind == "namespace-groups" && len(m.choices) == 0 {
+			lines = append(lines, "No saved groups in this context.")
+		} else {
+			lines = append(lines, "No matches")
+		}
 	}
 	hints := []shortcut{{"↑/↓ Ctrl+J/K", "move"}, {"Enter", "select"}, {"Esc", "close"}}
 	if m.pickerKind == "inspector-position" {
@@ -326,7 +340,13 @@ func (m *model) pickerView(width, height int) string {
 		hintLine = m.theme.style("muted").Render(" Type to search · ") + hintLine
 	}
 	lines = append(lines, "", hintLine)
+	if m.pickerKind == "namespace-groups" {
+		lines = append(lines, m.shortcuts(" · ", shortcut{"Ctrl+N", "save current"}, shortcut{"Ctrl+E", "edit"}, shortcut{"Ctrl+R", "rename"}, shortcut{"Ctrl+D", "delete"}))
+	}
 	title := strings.Title(m.pickerKind)
+	if m.pickerKind == "namespace-groups" {
+		title = "Namespace groups · " + m.contextLabel(m.contextName)
+	}
 	if m.pickerKind == "inspector-position" {
 		title = "Inspector position · preview"
 	}
@@ -439,11 +459,13 @@ func (m *model) baseView() tea.View {
 		lines = append(lines, m.theme.style(token).Render(fit(status, w)))
 		lines = append(lines, m.theme.style("muted").Render(fit(m.footerHelp(d), w)))
 		content = strings.Join(lines, "\n")
-		if m.mode == "bundle-loading" || m.mode == "picker" || m.mode == "details" || m.showingHelp() || m.mode == "edit-error" || m.mode == "edit-review" || m.mode == "operation-error" || m.mode == "forward-details" || m.mode == "relations-loading" || m.mode == "rollouts-loading" || m.mode == "rollout-details" || m.mode == "action-confirm" || m.mode == "delete-confirm" || m.mode == "action-running" || m.mode == "access" || m.mode == "access-loading" || m.mode == "overview" || m.showingDebug() {
+		if m.mode == "namespace-group" || m.mode == "bundle-loading" || m.mode == "picker" || m.mode == "details" || m.showingHelp() || m.mode == "edit-error" || m.mode == "edit-review" || m.mode == "operation-error" || m.mode == "forward-details" || m.mode == "relations-loading" || m.mode == "rollouts-loading" || m.mode == "rollout-details" || m.mode == "action-confirm" || m.mode == "delete-confirm" || m.mode == "action-running" || m.mode == "access" || m.mode == "access-loading" || m.mode == "overview" || m.showingDebug() {
 			bounds := m.modalBounds()
 			mw, mh := bounds.width, bounds.height
 			modal := ""
-			if m.mode == "picker" {
+			if m.mode == "namespace-group" {
+				modal = m.namespaceGroupView(mw, mh)
+			} else if m.mode == "picker" {
 				mw = min(90, mw)
 				mh = min(24, mh)
 				modal = m.pickerView(mw, mh)
