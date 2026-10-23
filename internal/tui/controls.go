@@ -253,6 +253,9 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 			case "N":
 				m.toggleLogPrefixes()
 				return nil
+			case "H":
+				m.toggleLogHighlighting()
+				return nil
 			case "/":
 				return m.logsInput("log-search")
 			case "o":
@@ -1180,6 +1183,7 @@ Explore
   Logs: w / s / f    Toggle wrapping / follow latest / logs-only terminal
   Logs: c / p / F    Container / previous instance / live or snapshot
   Logs: O / T / N    Saved time/line options / timestamps / source prefixes
+  Logs: H            Toggle syntax highlighting (saved)
   Logs: /            Filter text; include:TEXT !TEXT re:REGEX (quote spaces)
   Log fields         level>=warn, level=warn,error, request_id=abc, http.status=500
   Log filters        Terms combine; ! excludes; empty input clears the filter
@@ -1239,6 +1243,7 @@ patch. Errors/conflicts retain the private file. Unchanged edits do not write.
 Logs
 Live logs: Space pauses, / searches, o saves, F switches live/snapshot.
 w wraps, s follows latest lines, f fills the terminal; Esc leaves focus first.
+H toggles syntax highlighting; search matches stay highlighted.
 Snapshots: last 500 lines / 1 MiB per source; aggregate at most 4 MiB.
 Live logs retain 4 MiB / 10,000 lines and follow at most 64 containers.
 

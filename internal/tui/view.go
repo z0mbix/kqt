@@ -305,6 +305,10 @@ func (m *model) pickerView(width, height int) string {
 	for i := start; i < min(len(m.matches), start+capacity); i++ {
 		c := m.matches[i]
 		label := kube.Safe(c.name) + " · " + kube.Safe(c.description)
+		if m.pickerKind == "contexts" {
+			canonical, _ := m.resolveContext(c.name)
+			label = m.contextNameStyle(canonical, c.name, i == m.pickerIndex).Render(kube.Safe(c.name)) + " · " + kube.Safe(c.description)
+		}
 		if m.pickerKind == "namespace-groups" {
 			label = "@" + label
 		}

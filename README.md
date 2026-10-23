@@ -93,9 +93,13 @@ picker opens. UI preferences never silently select a different Kubernetes contex
 Use `:alias prod` to give the current context a short name, or
 `:alias prod "actual-context-name"` to name another configured context.
 `:ctx prod` and `kqt --context prod` resolve the alias. The header uses the short
-name; the context picker also shows the real name. `:alias` lists aliases and
+name; the context picker also shows the real name. Picker rows omit repeated
+context/cluster names and label namespace and distinct cluster details.
+Additional aliases remain visible and searchable. `:alias` lists aliases and
 `:unalias prod` removes one. Aliases live in kqt's config and leave kubeconfig
 unchanged. Saved views and namespaces stay attached to the real context name.
+Picker names use the header's theme colours, including production-context
+highlighting, with readable emphasis on selected rows and in the no-colour theme.
 
 The single-line header shows the context, namespace and connection state, with
 the kqt title on the right (shortened to `kqt` on narrower terminals). Context
@@ -152,6 +156,7 @@ Escape outside search to close it. Reopening help starts with the full view.
 | `w`, `s`, `f` in logs | Toggle line wrapping, follow latest lines, logs-only terminal |
 | `Space`, `/`, `F`, `o` in logs | Pause, search, switch live/snapshot, save displayed logs |
 | `O`, `T`, `N` in logs | Saved log options, toggle timestamps, toggle source prefixes |
+| `H` in logs | Toggle syntax highlighting; saved between sessions |
 | Mouse drag | Select visible text; release to copy, with a brief “Copied” flash |
 | `S` (also `E`), `:status`, `:events selected` | Readable status, conditions, containers, and live events |
 | `M`, `:metadata` | Resource labels, annotations and finalizers in the same panel |
@@ -286,6 +291,11 @@ objects/arrays get syntax colours, including severity colours for `level`,
 and highlighted levels such as `INFO`, `WARN`, and `ERROR`. Mixed formats work
 together; incomplete JSON and other text stay readable. Messages keep their
 original spacing and order, and saved logs contain plain text without colour codes.
+Press `H` (Shift+h) to toggle syntax highlighting without interrupting collection
+or moving your scroll position. The title shows `plain` when it is off; search
+matches remain highlighted. This also works in the logs-only view. The choice
+is saved as `logs.highlight` (enabled by default), and is also available in `O`
+log options.
 
 Logs follow live by default. Workloads attach to new matching pods and stop
 following removed pods; discovery reconciles every two seconds. Output from
@@ -567,6 +577,7 @@ logs:
   since: 10m          # omit for all available history within the line limit
   tail_lines: 1000    # omit for live 200 / snapshot 500; -1 all; 0 no initial lines
   timestamps: true
+  highlight: true
   prefixes: auto     # auto, "on", "off"
   wrap: true
   follow: true

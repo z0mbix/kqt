@@ -242,10 +242,15 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             assert history_file.read_bytes()==before, 'failed export changed saved command history'
             assert len(history())==5 and 'layouts' not in history(), 'configured history limit did not evict the oldest commands'
         elif args.feature=='contexts':
+            send('c'); expect('demo · cluster: offline sample cluster · namespace: default')
+            assert 'demo · demo' not in screen(raw,width,height,resize_events), 'picker repeats its context label'
+            send('\x1b')
             send(':alias prod\r'); expect('Context: prod'); expect('Context alias saved:')
             assert 'prod: demo' in config.read_text(), 'alias was not saved'
             send(':ctx pr\t'); expect(':ctx prod'); send('\x1b')
-            send('c'); expect('Contexts'); expect('prod'); expect('demo'); send('\r')
+            send('c'); expect('Contexts'); expect('prod · context: demo')
+            assert 'aliases: prod' not in screen(raw,width,height,resize_events), 'picker repeats its primary alias'
+            send('\r')
             expect('Context: prod'); expect('connected')
             send(':ctx prod\r'); expect('Context: prod'); expect('pods [12]')
             send(':alias\r'); expect('Context aliases'); expect('prod → demo'); send('\x1b')
@@ -329,6 +334,11 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             send('\x1b')
         elif args.feature=='logs-controls':
             send('L'); expect('Containers'); send('\r'); expect('live heartbeat')
+            expect('H: highlight')
+            send('H'); expect('· plain')
+            assert 'highlight: false' in config.read_text(), 'highlight preference was not saved'
+            send('H')
+            assert '· plain' not in screen(raw,width,height,resize_events).splitlines()[1], 'H did not restore highlighting'
             send('s'); expect('follow off')
             send('w')
             title=screen(raw,width,height,resize_events).splitlines()[1]
@@ -339,6 +349,8 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             send('c'); expect('Containers'); send('\x1b'); pump(0.2)
             current=screen(raw,width,height,resize_events)
             assert 'Context:' not in current and '╭' not in current and 'Esc: close' not in current, 'focus retained application UI:\n'+current
+            send('H')
+            assert 'highlight: false' in config.read_text(), 'H did not work in log focus'
             # Real SGR mouse press, drag, release. Arrival during a held drag
             # must not change the displayed text, even though collection runs.
             rows=current.splitlines()
@@ -372,6 +384,7 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             assert 'live heartbeat' in target.read_text(), 'focus log export lost collected output'
             assert 'Save to:' not in screen(raw,width,height,resize_events), 'focus save prompt did not close'
             send('\x1b'); expect('Context:'); expect('follow off')
+            expect('· plain')
             send('s'); expect('following')
             send('F'); expect('snapshot'); send('F'); expect('live')
             send('\x1b')

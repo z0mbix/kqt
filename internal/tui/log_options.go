@@ -14,13 +14,14 @@ type logPreferences struct {
 	Since      string `toml:"since,omitempty" yaml:"since,omitempty"`
 	TailLines  *int64 `toml:"tail_lines,omitempty" yaml:"tail_lines,omitempty"`
 	Timestamps bool   `toml:"timestamps" yaml:"timestamps"`
+	Highlight  bool   `toml:"highlight" yaml:"highlight"`
 	Prefixes   string `toml:"prefixes" yaml:"prefixes"`
 	Wrap       bool   `toml:"wrap" yaml:"wrap"`
 	Follow     bool   `toml:"follow" yaml:"follow"`
 }
 
 func defaultLogPreferences() logPreferences {
-	return logPreferences{Timestamps: true, Prefixes: "auto", Wrap: true, Follow: true}
+	return logPreferences{Timestamps: true, Highlight: true, Prefixes: "auto", Wrap: true, Follow: true}
 }
 
 func parseLogSince(value string) (string, error) {
@@ -133,6 +134,14 @@ func (m *model) toggleLogPrefixes() {
 	m.applyLogOption("prefixes", "")
 }
 
+func (m *model) toggleLogHighlighting() {
+	p := &m.settings.Config.Logs
+	p.Highlight = !p.Highlight
+	m.saveLogPreference("highlight", p.Highlight)
+	m.logColours = nil
+	m.renderLogs()
+}
+
 func (m *model) logOptionChoices() []choice {
 	p := m.settings.Config.Logs
 	window := p.Since
@@ -161,7 +170,7 @@ func (m *model) logOptionChoices() []choice {
 		}
 		choices = append(choices, choice{"tail " + lines, description})
 	}
-	return append(choices, choice{"timestamps", fmt.Sprintf("toggle · currently %t", p.Timestamps)}, choice{"prefixes", "toggle pod/container prefixes · currently " + p.Prefixes}, choice{"prefixes auto", "show sources when combining containers"})
+	return append(choices, choice{"highlight", fmt.Sprintf("toggle syntax highlighting · currently %t", p.Highlight)}, choice{"timestamps", fmt.Sprintf("toggle · currently %t", p.Timestamps)}, choice{"prefixes", "toggle pod/container prefixes · currently " + p.Prefixes}, choice{"prefixes auto", "show sources when combining containers"})
 }
 
 func (m *model) chooseLogOption(value string) tea.Cmd {
@@ -213,6 +222,9 @@ func (m *model) applyLogOption(key, value string) tea.Cmd {
 		}
 	case "timestamps":
 		m.toggleLogTimestamps()
+		return nil
+	case "highlight":
+		m.toggleLogHighlighting()
 		return nil
 	case "prefixes":
 		if value == "auto" {

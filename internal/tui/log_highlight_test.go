@@ -161,6 +161,79 @@ func TestLogHighlightCacheFollowsBufferLifetime(t *testing.T) {
 	}
 }
 
+func TestLogHighlightTogglePreservesFrozenViewportAndStream(t *testing.T) {
+	m := demoModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
+	m.mode = "logs"
+	m.logObject, m.logContainer = m.rows[0], "web"
+	m.logFollow, m.logTail = true, false
+	m.logFeed = newLogFeed()
+	for i := range 60 {
+		m.logFeed.append(fmt.Sprintf(`{"level":"warn","message":"retry %d"}`, i))
+	}
+	m.logFeed.append("\x1b[31mERROR\x1b[0m retry\x1b]52;c;secret\a")
+	m.logPulse(logPulseMsg{m.generation, m.logToken, m.logFeed})
+	key(m, " ")
+	m.panel.SetYOffset(4)
+	before, offset := m.panel.GetContent(), m.panel.YOffset()
+	token, feed := m.logToken, m.logFeed
+	m.logFeed.append("INFO retry arrived while paused")
+	m.logPulse(logPulseMsg{m.generation, m.logToken, m.logFeed})
+	key(m, "H")
+	if m.settings.Config.Logs.Highlight || !strings.Contains(m.panelTitle, " · plain") {
+		t.Fatal("H did not disable highlighting")
+	}
+	if got := m.panel.GetContent(); got != ansi.Strip(before) || strings.Contains(got, "\x1b") || strings.Contains(got, "arrived") {
+		t.Fatalf("plain logs changed frozen text or retained escape sequences: %q", got)
+	}
+	if !m.logPaused || m.logTail || m.logToken != token || m.logFeed != feed || m.panel.YOffset() != offset {
+		t.Fatal("highlight toggle changed pause, scroll, follow or stream state")
+	}
+	saved, err := LoadSettings(m.settings.Path)
+	if err != nil || saved.Config.Logs.Highlight {
+		t.Fatalf("highlight preference not saved: %v", err)
+	}
+	key(m, "H")
+	if m.panel.GetContent() != before || m.panel.YOffset() != offset || strings.Contains(m.panelTitle, " · plain") {
+		t.Fatal("re-enabling highlighting did not restore the frozen display")
+	}
+	key(m, "H")
+	key(m, " ")
+	if got := m.panel.GetContent(); !strings.Contains(got, "arrived") || got != ansi.Strip(got) {
+		t.Fatal("resuming plain logs lost arrivals or restored syntax colours")
+	}
+
+	key(m, "f")
+	m.logSearch = "include:retry"
+	checkSearch := func() {
+		t.Helper()
+		plain := m.logContent()
+		var want []string
+		for _, line := range strings.Split(plain, "\n") {
+			want = append(want, m.theme.highlightLogMatches(line, m.logFilter.spans(line)))
+		}
+		got := m.panel.GetContent()
+		if got == plain || got != strings.Join(want, "\n") || ansi.Strip(got) != plain {
+			t.Fatal("plain mode lost search matches or restored syntax colours")
+		}
+	}
+	m.renderLogs()
+	checkSearch()
+	m.setTheme(builtThemes()["nord"])
+	checkSearch()
+	m.logFeed.append(`{"level":"error","message":"retry live"}`)
+	m.logPulse(logPulseMsg{m.generation, m.logToken, m.logFeed})
+	checkSearch()
+	m.openPicker("log-options")
+	m.chooseLogOption("highlight")
+	if !m.settings.Config.Logs.Highlight || m.mode != "logs" || !m.logFullScreen || m.logToken != token || m.logSearch != "include:retry" {
+		t.Fatal("log options did not restore highlighting while preserving focus, stream and search")
+	}
+	if !strings.Contains(m.panel.GetContent(), m.theme.style("accent").Render(`"message"`)) {
+		t.Fatal("re-enabling highlighting retained cached plain text")
+	}
+}
+
 func BenchmarkLogHighlighting(b *testing.B) {
 	palette := builtThemes()["nord"]
 	line := `[default/web-0003:web] 2026-10-13T15:40:18Z {"level":"info","message":"request completed","status":200,"ready":true,"nil":null}`

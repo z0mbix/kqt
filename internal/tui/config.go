@@ -355,6 +355,7 @@ logs:
   # since: 10m # omit for all available history within the line limit
   # tail_lines: 1000 # omit for live 200 / snapshot 500; -1 all; 0 no initial lines
   timestamps: true
+  highlight: true
   prefixes: auto # auto, "on", "off"
   wrap: true
   follow: true

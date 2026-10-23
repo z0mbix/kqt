@@ -80,11 +80,20 @@ func (m *model) contextChoices() []choice {
 			}
 		}
 		slices.Sort(aliases)
-		description := context.Name + " · " + context.Cluster + " · " + context.Namespace
+		name := context.Name
+		var details []string
 		if len(aliases) > 0 {
-			description += " · aliases: " + strings.Join(aliases, ", ")
+			name, aliases = aliases[0], aliases[1:]
+			details = append(details, "context: "+context.Name)
 		}
-		choices = append(choices, choice{m.contextLabel(context.Name), description})
+		if context.Cluster != "" && context.Cluster != context.Name {
+			details = append(details, "cluster: "+context.Cluster)
+		}
+		details = append(details, "namespace: "+context.Namespace)
+		if len(aliases) > 0 {
+			details = append(details, "aliases: "+strings.Join(aliases, ", "))
+		}
+		choices = append(choices, choice{name, strings.Join(details, " · ")})
 	}
 	return choices
 }

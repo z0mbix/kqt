@@ -27,13 +27,7 @@ func (m *model) headerView() string {
 	if ns == "" {
 		ns = "all"
 	}
-	contextStyle := m.theme.style("accent").Bold(true)
-	if productionContext(m.contextName) || productionContext(ctx) {
-		contextStyle = m.theme.style("error").Bold(true)
-		if m.theme.Name == "no-color" {
-			contextStyle = contextStyle.Underline(true).Reverse(true)
-		}
-	}
+	contextStyle := m.contextNameStyle(m.contextName, ctx, false)
 	state := "connected"
 	if m.backend == nil {
 		state = "disconnected"

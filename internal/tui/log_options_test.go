@@ -26,10 +26,10 @@ func TestLogPreferencesPreserveDefaultsAndRoundTripYAMLAndTOML(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if settings.Config.Logs.Timestamps || !settings.Config.Logs.Wrap || !settings.Config.Logs.Follow || settings.Config.Logs.Prefixes != "auto" || settings.Config.Logs.TailLines != nil {
+			if settings.Config.Logs.Timestamps || !settings.Config.Logs.Highlight || !settings.Config.Logs.Wrap || !settings.Config.Logs.Follow || settings.Config.Logs.Prefixes != "auto" || settings.Config.Logs.TailLines != nil {
 				t.Fatalf("partial config lost defaults: %+v", settings.Config.Logs)
 			}
-			if err := settings.savePatch(map[string]any{"logs": map[string]any{"since": "10m", "tail_lines": int64(1000), "prefixes": "off", "wrap": false, "follow": false}}); err != nil {
+			if err := settings.savePatch(map[string]any{"logs": map[string]any{"since": "10m", "tail_lines": int64(1000), "prefixes": "off", "highlight": false, "wrap": false, "follow": false}}); err != nil {
 				t.Fatal(err)
 			}
 			saved, err := LoadSettings(path)
@@ -37,7 +37,7 @@ func TestLogPreferencesPreserveDefaultsAndRoundTripYAMLAndTOML(t *testing.T) {
 				t.Fatal(err)
 			}
 			p := saved.Config.Logs
-			if p.Since != "10m" || p.TailLines == nil || *p.TailLines != 1000 || p.Prefixes != "off" || p.Timestamps || p.Wrap || p.Follow {
+			if p.Since != "10m" || p.TailLines == nil || *p.TailLines != 1000 || p.Prefixes != "off" || p.Timestamps || p.Highlight || p.Wrap || p.Follow {
 				t.Fatalf("preferences lost: %+v", p)
 			}
 			before, _ := os.ReadFile(path)

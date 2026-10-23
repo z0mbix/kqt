@@ -78,7 +78,7 @@ func (m *model) footerHelp(d dimensions) string {
 		}
 	}
 	if m.showingLogs() {
-		hints = []shortcut{{"/", "filter"}, {"O", "log options"}, {"T", "timestamps"}, {"N", "sources"}, {"w", "wrap"}, {"s", "follow"}, {"f", "focus"}, {"z", "header"}, {"o", "save"}, {"Esc", "close"}}
+		hints = []shortcut{{"/", "filter"}, {"O", "log options"}, {"H", "highlight"}, {"T", "timestamps"}, {"N", "sources"}, {"w", "wrap"}, {"s", "follow"}, {"f", "focus"}, {"z", "header"}, {"o", "save"}, {"Esc", "close"}}
 		if m.mode == "log-search" {
 			hints = []shortcut{{"Enter", "apply"}, {"Esc", "cancel"}, {"Text / re:regex / !exclude", "filter"}, {"level>=warn / request_id=abc", "fields"}}
 		}

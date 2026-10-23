@@ -129,6 +129,9 @@ func (m *model) logTitle() {
 	if m.logWrap {
 		m.panelTitle += " · wrap"
 	}
+	if !m.settings.Config.Logs.Highlight {
+		m.panelTitle += " · plain"
+	}
 	if since := m.settings.Config.Logs.Since; since != "" && since != "all" {
 		m.panelTitle += " · last " + since
 	}
@@ -192,7 +195,11 @@ func (m *model) renderLogs() {
 		shown := m.presentLogLine(line)
 		styled, ok := m.logColours[line]
 		if !ok {
-			styled = m.theme.renderLogLine(shown)
+			if m.settings.Config.Logs.Highlight {
+				styled = m.theme.renderLogLine(shown)
+			} else {
+				styled = kube.SafeLogLines(shown)
+			}
 			m.logColours[line] = styled
 		}
 		return m.theme.highlightLogMatches(styled, m.logFilter.spans(shown))

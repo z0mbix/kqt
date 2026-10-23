@@ -50,7 +50,7 @@ func TestContextAliasesSaveCompleteDisplayAndUseCanonicalState(t *testing.T) {
 func aliasLoader(t *testing.T) *kube.Loader {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "kubeconfig")
-	data := "apiVersion: v1\nkind: Config\ncurrent-context: real-context\nclusters:\n- name: test\n  cluster:\n    server: https://example.invalid\ncontexts:\n- name: real-context\n  context:\n    cluster: test\n- name: another-context\n  context:\n    cluster: test\nusers: []\n"
+	data := "apiVersion: v1\nkind: Config\ncurrent-context: real-context\nclusters:\n- name: test\n  cluster:\n    server: https://example.invalid\n- name: k3d-cfgerer\n  cluster:\n    server: https://example.invalid\ncontexts:\n- name: real-context\n  context:\n    cluster: test\n- name: another-context\n  context:\n    cluster: test\n- name: k3d-cfgerer\n  context:\n    cluster: k3d-cfgerer\nusers: []\n"
 	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -59,6 +59,60 @@ func aliasLoader(t *testing.T) *kube.Loader {
 		t.Fatal(err)
 	}
 	return loader
+}
+
+func TestContextPickerOmitsRepeatedNamesAndKeepsSearchableDetails(t *testing.T) {
+	m := demoModel(t)
+	m.options.Demo = false
+	m.loader = aliasLoader(t)
+	m.openPicker("contexts")
+	for _, c := range m.choices {
+		want := "cluster: test · namespace: default"
+		if c.name == "k3d-cfgerer" {
+			want = "namespace: default"
+		}
+		if c.description != want {
+			t.Fatalf("context %q description = %q, want %q", c.name, c.description, want)
+		}
+	}
+	row := "k3d-cfgerer · namespace: default"
+	if view := ansi.Strip(m.pickerView(90, 24)); !strings.Contains(view, row) || strings.Contains(view, "k3d-cfgerer · k3d-cfgerer") {
+		t.Fatal("context picker still repeats the context/cluster name", view)
+	}
+	m.settings.Config.ContextAliases = map[string]string{"short": "k3d-cfgerer", "team": "k3d-cfgerer", "another-context": "k3d-cfgerer"}
+	m.openPicker("contexts")
+	for _, query := range []string{"short", "k3d-cfgerer", "team"} {
+		m.input.SetValue(query)
+		m.filterChoices()
+		var matched *choice
+		for i := range m.matches {
+			if m.matches[i].name == "short" {
+				matched = &m.matches[i]
+				break
+			}
+		}
+		if matched == nil {
+			t.Fatalf("search %q lost the canonical context or an alias: %v", query, m.matches)
+		}
+		c := *matched
+		if c.description != "context: k3d-cfgerer · namespace: default · aliases: team" {
+			t.Fatal("alias description repeats its display name or hides identity", c.description)
+		}
+		if canonical, err := m.resolveContext(c.name); err != nil || canonical != "k3d-cfgerer" {
+			t.Fatal("compact row changed context resolution", canonical, err)
+		}
+	}
+	m.input.SetValue("test")
+	m.filterChoices()
+	for _, name := range []string{"real-context", "another-context"} {
+		found := false
+		for _, c := range m.matches {
+			found = found || c.name == name
+		}
+		if !found {
+			t.Fatal("distinct cluster names are no longer searchable", name, m.matches)
+		}
+	}
 }
 
 func TestContextAliasCLIResolutionCollisionsAndStaleTargets(t *testing.T) {
@@ -106,5 +160,47 @@ func TestContextAliasesYAMLAndTOMLRemovalAndValidation(t *testing.T) {
 				t.Fatal("invalid alias was written")
 			}
 		})
+	}
+}
+
+func TestContextPickerHighlightsNamesWithThemeAndSelectionContrast(t *testing.T) {
+	m := demoModel(t)
+	m.options.Demo = false
+	m.loader = aliasLoader(t)
+	m.settings.Config.ContextAliases = map[string]string{"prod": "k3d-cfgerer"}
+	for _, themeName := range []string{"catppuccin-mocha", "nord", "accessible-dark", "accessible-light", "no-color"} {
+		m.setTheme(builtThemes()[themeName])
+		m.openPicker("contexts")
+		for _, selected := range []bool{false, true} {
+			m.pickerIndex = 0
+			if selected {
+				m.pickerIndex = 1 // prod, whose canonical context is k3d-cfgerer.
+			}
+			style := m.contextNameStyle("k3d-cfgerer", "prod", selected)
+			view := m.pickerView(90, 24)
+			if !strings.Contains(view, style.Render("prod")) || !strings.Contains(ansi.Strip(view), "prod · context: k3d-cfgerer · namespace: default") {
+				t.Fatalf("%s selected=%v: picker lost name highlighting or context details", themeName, selected)
+			}
+			if themeName == "no-color" {
+				if hasExplicitColour(view) || !style.GetUnderline() {
+					t.Fatal("monochrome context warning lost emphasis or emitted colours")
+				}
+			} else if selected {
+				fg, bg := style.GetForeground(), m.theme.color("selection_background")
+				if themeContrast(fg, bg) < 4.5 || themeContrast(ansi.Convert256(fg), ansi.Convert256(bg)) < 4.5 {
+					t.Fatal("selected context name has poor contrast", themeName)
+				}
+			}
+		}
+	}
+	m.setTheme(builtThemes()["catppuccin-mocha"])
+	for _, tc := range []struct{ canonical, label, token string }{
+		{"eks-production", "friendly", "error"}, {"eks-nonprod", "friendly", "accent"},
+		{"eks-pre-production", "friendly", "accent"}, {"demo", "prod", "error"},
+	} {
+		got := m.contextNameStyle(tc.canonical, tc.label, false).GetForeground()
+		if got != m.theme.color(tc.token) {
+			t.Fatal("picker and header production highlighting differ", tc)
+		}
 	}
 }
