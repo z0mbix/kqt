@@ -725,6 +725,35 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
             send('\x01\x0b'+str(target)+'\r'); expect('Manifest saved to')
             assert json.loads(target.read_text())['kind']=='Pod'
             send('\x1b')
+            for width,height in [(80,24),(180,48)]:
+                resize_events.append((len(raw),width,height))
+                fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',height,width,0,0))
+                os.killpg(process.pid,signal.SIGWINCH); pump(0.3)
+                send('y/cntprt'); expect('YAML / cntprt'); expect('1/1 matches'); expect('containerPort')
+                send('\r'); expect('n/N: matches')
+                send('J'); expect('JSON ·'); expect('1/1 matches'); expect('containerPort')
+                send('y/\x01\x0bname\r'); expect('matches · /name')
+                initial=re.search(r'(\d+)/(\d+) matches',screen(raw,width,height,resize_events)).groups()
+                assert int(initial[1])>1, 'expected several name matches in resource view'
+                send('n')
+                assert re.search(r'(\d+)/(\d+) matches',screen(raw,width,height,resize_events)).group(1)!=initial[0], 'n did not navigate resource view matches'
+                send('N')
+                assert re.search(r'(\d+)/(\d+) matches',screen(raw,width,height,resize_events)).groups()==initial, 'N did not restore the previous resource match'
+                send('/\x01\x0bzzzzzzzzzzzz'); expect('no matches')
+                send('\x1b'); expect('matches · /name')
+                send('C'); expect('sent to terminal clipboard')
+                copied=base64.b64decode(re.findall(rb'\x1b]52;c;([A-Za-z0-9+/=]+)',raw)[-1])
+                assert b'kind: Pod' in copied and b'containerPort:' in copied and b'\x1b' not in copied, 'search changed the complete copied resource'
+                send('o'); expect('Save manifest to:')
+                target=root/f'searched-{width}.yaml'
+                send('\x01\x0b'+str(target)+'\r'); expect('Manifest saved to')
+                assert 'kind: Pod' in target.read_text() and 'containerPort:' in target.read_text(), 'search changed the complete exported resource'
+                send('\x1b'); expect('YAML ·')
+                assert 'matches · /name' not in screen(raw,width,height,resize_events), 'Escape did not clear search before closing'
+                send('/cntprt\rq'); expect('pods [12]')
+                send('J'); expect('JSON ·')
+                assert 'matches · /cntprt' not in screen(raw,width,height,resize_events), 'reopening a resource view retained search'
+                send('\x1b')
         else:
             raise AssertionError('unknown feature: '+args.feature)
         send('q')

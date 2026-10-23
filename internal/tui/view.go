@@ -64,7 +64,7 @@ func (m *model) inspectorDimensions() dimensions {
 func (m *model) resize() {
 	m.input.SetWidth(max(1, m.width-8))
 	m.resizeHistorySearch()
-	if m.mode == "inspector-search" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.showingLogs() && m.mode != "logs" || m.mode == "event-save" || m.mode == "debug-image" {
+	if m.mode == "inspector-search" || m.mode == "details-search" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.showingLogs() && m.mode != "logs" || m.mode == "event-save" || m.mode == "debug-image" {
 		m.input.SetWidth(max(1, m.width-ansi.StringWidth(m.input.Prompt)-2))
 		m.input.SetCursor(m.input.Position()) // Reflow long paths immediately after a resize.
 	}
@@ -295,7 +295,7 @@ func (m *model) inspectorView(d dimensions) string {
 			title = "Inspector · focused · " + m.secretLabel() + " · " + strings.ToUpper(m.inspectorFormat)
 		}
 	}
-	title += m.inspectorSearchLabel()
+	title += m.inspectorSearch.label()
 	return m.frame(title, m.inspector.View(), d.width, d.height, m.inspectorFocused, hints...)
 }
 func (m *model) pickerView(width, height int) string {
@@ -460,14 +460,14 @@ func (m *model) baseView() tea.View {
 				status += " · resynced; history may have gaps"
 			}
 		}
-		if m.mode == "inspector-search" || m.mode == "help-search" || m.mode == "command" || m.mode == "history-search" || m.mode == "filter" || m.showingLogs() && m.mode != "logs" || m.mode == "event-search" || m.mode == "event-save" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.mode == "action-confirm" || m.mode == "debug-image" {
+		if m.mode == "inspector-search" || m.mode == "details-search" || m.mode == "help-search" || m.mode == "command" || m.mode == "history-search" || m.mode == "filter" || m.showingLogs() && m.mode != "logs" || m.mode == "event-search" || m.mode == "event-save" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.mode == "action-confirm" || m.mode == "debug-image" {
 			status = m.input.View()
 			token = "foreground"
 		}
 		lines = append(lines, m.theme.style(token).Render(fit(status, w)))
 		lines = append(lines, m.theme.style("muted").Render(fit(m.footerHelp(d), w)))
 		content = strings.Join(lines, "\n")
-		if m.mode == "namespace-group" || m.mode == "bundle-loading" || m.mode == "picker" || m.mode == "details" || m.showingHelp() || m.mode == "edit-error" || m.mode == "edit-review" || m.mode == "operation-error" || m.mode == "forward-details" || m.mode == "relations-loading" || m.mode == "rollouts-loading" || m.mode == "rollout-details" || m.mode == "action-confirm" || m.mode == "delete-confirm" || m.mode == "action-running" || m.mode == "access" || m.mode == "access-loading" || m.mode == "overview" || m.showingDebug() {
+		if m.mode == "namespace-group" || m.mode == "bundle-loading" || m.mode == "picker" || m.showingDetails() || m.showingHelp() || m.mode == "edit-error" || m.mode == "edit-review" || m.mode == "operation-error" || m.mode == "forward-details" || m.mode == "relations-loading" || m.mode == "rollouts-loading" || m.mode == "rollout-details" || m.mode == "action-confirm" || m.mode == "delete-confirm" || m.mode == "action-running" || m.mode == "access" || m.mode == "access-loading" || m.mode == "overview" || m.showingDebug() {
 			bounds := m.modalBounds()
 			mw, mh := bounds.width, bounds.height
 			modal := ""
@@ -479,7 +479,18 @@ func (m *model) baseView() tea.View {
 				modal = m.pickerView(mw, mh)
 			} else {
 				hints := []shortcut{{"Esc", "close"}, {"hjkl", "scroll"}}
-				if m.showingHelp() {
+				title := m.panelTitle
+				if m.showingDetails() {
+					title += m.detailsSearch.label()
+					back := "close"
+					if m.detailsSearch.query != "" {
+						back = "clear search"
+					}
+					hints = []shortcut{{"/", "search"}, {"n/N", "matches"}, {"Esc", back}}
+					if m.mode == "details-search" {
+						hints = []shortcut{{"↑/↓", "matches"}, {"Enter", "keep search"}, {"Esc", "cancel"}}
+					}
+				} else if m.showingHelp() {
 					hints = []shortcut{{"/", "search"}, {"Tab", "pane"}, {"Esc", "close"}}
 					if m.mode == "help-search" {
 						hints = []shortcut{{"Enter", "keep filter"}, {"Esc", "cancel"}, {"↑/↓", "scroll"}}
@@ -503,7 +514,7 @@ func (m *model) baseView() tea.View {
 					hints = []shortcut{{"←/→", "choose"}, {"Enter", "confirm"}, {"Esc", "cancel"}}
 					body += "\n\n" + m.deleteButtons()
 				}
-				modal = m.frame(m.panelTitle, body, mw, mh, true, hints...)
+				modal = m.frame(title, body, mw, mh, true, hints...)
 			}
 			modal = lipgloss.NewStyle().Background(m.theme.color("surface")).Foreground(m.theme.color("foreground")).Render(modal)
 			content = lipgloss.NewCompositor(lipgloss.NewLayer(content), lipgloss.NewLayer(modal).X(bounds.x).Y(bounds.y).Z(1)).Render()

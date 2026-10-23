@@ -16,10 +16,10 @@ type manifestSavedMsg struct {
 }
 
 func (m *model) manifestFormat() string {
-	if m.mode == "details" && m.detailFormat == "json" {
+	if m.showingDetails() && m.detailFormat == "json" {
 		return "json"
 	}
-	if m.mode == "details" {
+	if m.showingDetails() {
 		return "yaml"
 	}
 	return m.inspectorFormat

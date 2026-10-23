@@ -129,7 +129,7 @@ func (m *model) mouseWheel(v tea.MouseWheelMsg) {
 	}
 	if m.mode != "" {
 		switch m.mode {
-		case "details", "help", "help-search", "forward-details", "edit-error", "edit-review", "delete-confirm", "operation-error", "overview", "access", "rollout-details", "debug-image", "debug-confirm", "debug-loading", "debug-starting":
+		case "details", "details-search", "help", "help-search", "forward-details", "edit-error", "edit-review", "delete-confirm", "operation-error", "overview", "access", "rollout-details", "debug-image", "debug-confirm", "debug-loading", "debug-starting":
 			if !m.modalBounds().interior(v.X, v.Y) {
 				return
 			}

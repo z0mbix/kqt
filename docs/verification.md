@@ -890,3 +890,18 @@ The release tree passed Go race tests, vet, all fifteen Python tests and the ful
 local `just smoke` suite: classic/inspector/bottom restart checks, operator
 workflows and every feature scenario. No live cluster changes were needed for
 these UI checks.
+
+## v0.7.1 full resource search
+
+The full YAML/JSON resource views share the inspector's fuzzy search engine.
+Model tests cover live matching, navigation and wraparound, cancellation with
+horizontal/vertical viewport restoration, format/theme switches, Unicode on long
+unwrapped lines, refreshes, resource replacement and separate inspector queries.
+Secret tests cover both formats, hidden/revealed values, and clearing sensitive
+queries and cached text when values are hidden, including during input.
+
+The manifest terminal scenario exercises full-view search at 80x24 and 180x48,
+including format switches, no-match feedback, next/previous navigation, clearing,
+closing and reopening. Copy/export assertions verify that searches retain the
+complete resource without styling. Inspector and help terminal regressions also
+passed, alongside Go race tests, vet and all fifteen Python tests.

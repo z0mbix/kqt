@@ -18,6 +18,7 @@ type secretReadyMsg struct {
 
 func (m *model) clearSecret() {
 	m.resetInspectorSearch()
+	m.resetDetailsSearch()
 	m.secretToken++
 	if m.secretCancel != nil {
 		m.secretCancel()
@@ -81,7 +82,7 @@ func (m *model) toggleSecret() tea.Cmd {
 	m.secretTarget = kube.Identity(o)
 	ctx, cancel := context.WithTimeout(m.session.ctx, 15*time.Second)
 	m.secretCancel = cancel
-	if m.mode != "details" && m.inspectorDimensions().width == 0 {
+	if !m.showingDetails() && m.inspectorDimensions().width == 0 {
 		m.openDetails(true, false)
 	}
 	m.updateInspector()

@@ -151,8 +151,8 @@ Escape outside search to close it. Reopening help starts with the full view.
 | `:rollback REVISION` | Confirm restoring a retained Deployment pod template |
 | `d`, `y` / `v`, `J` | Describe, highlighted YAML, highlighted JSON |
 | `Tab`, then `J` / `y` | Focus inspector, then switch it to JSON / YAML |
-| `/` in the focused inspector | Fuzzy search YAML/JSON without hiding document lines |
-| `n` / `N` in the inspector | Next / previous matching line; `Esc` clears the search |
+| `/` in the inspector or full YAML/JSON view | Fuzzy search without hiding document lines |
+| `n` / `N` in resource views | Next / previous matching line; `Esc` clears the search |
 | `x` on a Secret | Toggle decoded values in the inspector or details |
 | `L`, `P` | Live logs / previous log snapshots from a pod, deployment, or statefulset |
 | `w`, `s`, `f` in logs | Toggle line wrapping, follow latest lines, logs-only terminal |
@@ -214,6 +214,14 @@ typing restores the previous search and scroll position. Outside the prompt,
 Switching YAML/JSON keeps the query. Selecting a different resource clears it.
 Inspector searches are never saved to config or command history; hidden Secret
 values remain hidden and cannot match.
+
+Full YAML (`y` / `v`) and JSON (`J`) resource views use the same `/` fuzzy search,
+live highlights and `n` / `N` navigation. Arrows move between matches while typing;
+`Enter` keeps the search and `Esc` cancels an edit. Outside the prompt, `Esc`
+clears the search before another `Esc` closes the view; `q` closes it directly.
+Each view keeps its own search, including across YAML/JSON switches and refreshes.
+Closing the full view clears its search. Searches only affect display: copy and
+export still include the complete resource without search styling.
 
 Completion covers commands, resource names and aliases, theme/layout names,
 contexts, known namespaces, saved namespace groups and their `@` actions, and

@@ -22,7 +22,7 @@ func (m *model) shortcuts(separator string, hints ...shortcut) string {
 }
 
 func (m *model) footerHelp(d dimensions) string {
-	if m.mode == "inspector-search" {
+	if m.mode == "inspector-search" || m.mode == "details-search" {
 		return " " + m.shortcuts("  ", shortcut{"↑/↓", "matches"}, shortcut{"Enter", "keep search"}, shortcut{"Esc", "cancel search"})
 	}
 	if m.mode == "help-search" {
@@ -72,6 +72,13 @@ func (m *model) footerHelp(d dimensions) string {
 	} else if m.mode == "" && len(m.resourceForwards()) > 0 {
 		hints = []shortcut{{"x", "stop forwards for resource"}, {"F", "manage forwards"}, {":", "command"}, {"?", "help"}, {"q", "quit"}}
 	}
+	if m.mode == "details" {
+		back := "close"
+		if m.detailsSearch.query != "" {
+			back = "clear search"
+		}
+		hints = []shortcut{{"/", "fuzzy search"}, {"n/N", "matches"}, {"Esc", back}, {"y/J", "YAML/JSON"}, {"hjkl", "scroll"}, {"C", "copy"}, {"o", "save"}, {"q", "close"}}
+	}
 	if o, ok := m.current(); ok && o.GetKind() == "Secret" && (m.mode == "" || m.mode == "details") {
 		action := "reveal"
 		if m.secretTarget != "" {
@@ -79,7 +86,10 @@ func (m *model) footerHelp(d dimensions) string {
 		}
 		hints = []shortcut{{"x", action + " values"}, {"y", "YAML"}, {"J", "JSON"}, {"Tab", "inspector"}, {"?", "help"}, {"Esc", "close"}}
 		if m.mode == "details" {
-			hints = []shortcut{{"x", action + " values"}, {"y", "YAML"}, {"J", "JSON"}, {"hjkl", "scroll"}, {"Esc", "close"}}
+			hints = []shortcut{{"x", action + " values"}, {"/", "fuzzy search"}, {"n/N", "matches"}, {"y/J", "YAML/JSON"}, {"Esc", "close"}}
+			if m.detailsSearch.query != "" {
+				hints[len(hints)-1] = shortcut{"Esc", "clear search"}
+			}
 		} else if m.inspectorFocused {
 			hints = []shortcut{{"x", action + " values"}, {"y", "YAML"}, {"J", "JSON"}, {"/", "fuzzy search"}, {"n/N", "matches"}, inspectorBack, {"j/k", "scroll"}}
 		}

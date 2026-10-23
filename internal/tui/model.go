@@ -176,9 +176,11 @@ type model struct {
 	pickerKind                               string
 	panel, inspector                         viewport.Model
 	detailFormat                             string
+	detailKey, detailContent                 string
+	detailsSearch                            documentSearchState
 	inspectedKey, inspectorContent           string
 	inspectorFocused                         bool
-	inspectorSearch                          inspectorSearchState
+	inspectorSearch                          documentSearchState
 	inspectorPreview                         *inspectorPreview
 	secretToken                              uint64
 	secretCancel                             context.CancelFunc
@@ -955,8 +957,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.copyFlash = ""
 		}
 	default:
-		if m.mode == "inspector-search" {
-			return m, m.updateInspectorSearch(msg)
+		if m.mode == "inspector-search" || m.mode == "details-search" {
+			return m, m.updateDocumentSearch(msg)
 		}
 		if m.mode == "help-search" {
 			return m, m.updateHelpSearch(msg)

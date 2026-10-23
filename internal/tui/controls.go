@@ -76,8 +76,8 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.mode == "help-search" {
 		return m.helpSearchKey(msg)
 	}
-	if m.mode == "inspector-search" {
-		return m.inspectorSearchKey(msg)
+	if m.mode == "inspector-search" || m.mode == "details-search" {
+		return m.documentSearchKey(msg)
 	}
 	if m.mode == "help" {
 		if k == "/" {
@@ -221,6 +221,11 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 			return m.openAccess(m.accessQuery)
 		}
 		if k == "esc" || k == "q" {
+			if k == "esc" && m.mode == "details" && m.detailsSearch.query != "" {
+				m.detailsSearch = documentSearchState{index: -1}
+				m.detailsSearch.render(m.detailContent, m.theme, &m.panel)
+				return nil
+			}
 			m.cancelDebug()
 			m.cancelRollouts()
 			if k == "esc" && m.mode == "logs" && m.logFullScreen {
@@ -339,6 +344,15 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		if m.mode == "details" {
 			switch k {
+			case "/":
+				return m.startDocumentSearch()
+			case "n", "N":
+				step := 1
+				if k == "N" {
+					step = -1
+				}
+				m.detailsSearch.next(m.detailContent, m.theme, &m.panel, step)
+				return nil
 			case "C":
 				return m.copyManifest(m.manifestFormat(), false)
 			case "o":
@@ -390,7 +404,7 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	if m.inspectorFocused {
 		if k == "/" {
-			return m.startInspectorSearch()
+			return m.startDocumentSearch()
 		}
 		if k == "n" || k == "N" {
 			step := 1
@@ -576,6 +590,9 @@ func (m *model) openDetails(manifest, asJSON bool) {
 	if !ok {
 		return
 	}
+	if !m.showingDetails() {
+		m.resetDetailsSearch()
+	}
 	m.mode = "details"
 	m.panel.SoftWrap = false
 	m.detailFormat = "describe"
@@ -587,18 +604,29 @@ func (m *model) openDetails(manifest, asJSON bool) {
 	}
 	m.renderDetails()
 	m.panel.GotoTop()
+	if m.detailsSearch.query != "" {
+		m.detailsSearch.refresh(m.detailContent, m.theme, &m.panel, true)
+		m.detailsSearch.show(m.detailContent, &m.panel)
+	}
 }
 func (m *model) renderDetails() {
-	if m.mode != "details" {
+	if !m.showingDetails() {
 		return
 	}
 	o, ok := m.current()
 	if !ok {
+		m.resetDetailsSearch()
+		m.detailKey = ""
 		m.panelTitle = "Details"
-		m.panel.SetContent("No resource selected.")
+		m.detailContent = "No resource selected."
+		m.panel.SetContent(m.detailContent)
 		return
 	}
-	offset := m.panel.YOffset()
+	if key := kube.Identity(o); key != m.detailKey {
+		m.resetDetailsSearch()
+		m.detailKey = key
+		m.panel.GotoTop()
+	}
 	m.panelTitle = "Describe · " + o.GetName()
 	content := m.describe(o)
 	if m.detailFormat == "yaml" || m.detailFormat == "json" {
@@ -618,8 +646,10 @@ func (m *model) renderDetails() {
 		format, _, _ := strings.Cut(m.panelTitle, " · ")
 		m.panelTitle = format + " · " + m.secretLabel() + " · " + o.GetName()
 	}
-	m.panel.SetContent(content)
-	m.panel.SetYOffset(offset)
+	if content != m.detailContent {
+		m.detailContent = content
+		m.detailsSearch.refresh(content, m.theme, &m.panel, false)
+	}
 }
 func (m *model) openLogs(previous bool) tea.Cmd {
 	o, ok := m.current()
@@ -1182,6 +1212,8 @@ Explore
   Inspector: /       Fuzzy search document lines; Enter keeps, Esc cancels
   Inspector: n / N   Next / previous matching line; Esc clears the search
   Details: J / y     Switch open manifest panel to JSON / YAML
+  Details: /         Fuzzy search full YAML/JSON views; Enter keeps, Esc cancels
+  Details: n / N     Next / previous matching line; Esc clears before closing
   Secrets: x         Toggle decoded values; hidden by default
   L / P              Logs / previous logs: pod, deployment, statefulset
   S / :status        Status, conditions, containers, and live events (E also works)
@@ -1270,11 +1302,11 @@ Live logs retain 4 MiB / 10,000 lines and follow at most 64 containers.
 Clipboard
 Drag copies visible text using the terminal's OSC52 clipboard support.
 
-Inspector search
-Focus the inspector with Tab or a click, then / searches YAML or JSON as you type.
+Resource search
+Focus the inspector with Tab or a click, or open a full YAML/JSON view, then / searches as you type.
 Matching ignores case and allows gaps (contport matches containerPort).
 The full document stays visible; n/N move between matching lines in document order.
-Enter keeps the search, / edits it, and Esc clears it before leaving the inspector.
+Enter keeps the search, / edits it, and Esc clears it before leaving the view.
 Searches are not saved. Selecting another resource clears the search.
 
 Metrics
