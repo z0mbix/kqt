@@ -22,6 +22,9 @@ func (m *model) shortcuts(separator string, hints ...shortcut) string {
 }
 
 func (m *model) footerHelp(d dimensions) string {
+	if m.mode == "inspector-search" {
+		return " " + m.shortcuts("  ", shortcut{"↑/↓", "matches"}, shortcut{"Enter", "keep search"}, shortcut{"Esc", "cancel search"})
+	}
 	if m.mode == "help-search" {
 		return " " + m.shortcuts("  ", shortcut{"Tab", "pane"}, shortcut{"↑/↓", "scroll"}, shortcut{"Enter", "keep filter"}, shortcut{"Esc", "cancel search"})
 	}
@@ -32,6 +35,10 @@ func (m *model) footerHelp(d dimensions) string {
 		return m.theme.style("error").Render(" "+m.logFilterError) + " · " + m.shortcuts("", shortcut{"Esc", "cancel"})
 	}
 	inspectorAction := "show/place"
+	inspectorBack := shortcut{"Tab/Esc", "list"}
+	if m.inspectorSearch.query != "" {
+		inspectorBack = shortcut{"Esc", "clear search"}
+	}
 	if m.inspectorVisible() {
 		inspectorAction = "hide/place"
 	}
@@ -40,7 +47,7 @@ func (m *model) footerHelp(d dimensions) string {
 		hints = []shortcut{{"j/k", "move"}, {"Tab", "inspector"}, {"i/I", inspectorAction}, {"z", "header"}, {"O", "next sort"}, {"R", "reverse"}, {"S", "status"}, {":", "command"}, {"?", "help"}}
 	}
 	if m.inspectorFocused {
-		hints = []shortcut{{"j/k", "scroll"}, {"Ctrl+B/F", "page"}, {"g/G", "ends"}, {"i/I", inspectorAction}, {"z", "header"}, {"Tab/Esc", "list"}, {"?", "help"}, {"q", "quit"}}
+		hints = []shortcut{{"/", "fuzzy search"}, {"n/N", "matches"}, inspectorBack, {"j/k", "scroll"}, {"Ctrl+B/F", "page"}, {"g/G", "ends"}, {"i/I", inspectorAction}, {"z", "header"}, {"?", "help"}, {"q", "quit"}}
 	}
 	if m.mode == "command" {
 		hints = []shortcut{{"↑/↓", "history"}, {"Ctrl+R", "search"}, {"Tab/Shift+Tab", "complete"}, {"Enter", "run"}, {"Esc", "cancel"}}
@@ -74,7 +81,7 @@ func (m *model) footerHelp(d dimensions) string {
 		if m.mode == "details" {
 			hints = []shortcut{{"x", action + " values"}, {"y", "YAML"}, {"J", "JSON"}, {"hjkl", "scroll"}, {"Esc", "close"}}
 		} else if m.inspectorFocused {
-			hints = []shortcut{{"x", action + " values"}, {"y", "YAML"}, {"J", "JSON"}, {"j/k", "scroll"}, {"Tab/Esc", "list"}}
+			hints = []shortcut{{"x", action + " values"}, {"y", "YAML"}, {"J", "JSON"}, {"/", "fuzzy search"}, {"n/N", "matches"}, inspectorBack, {"j/k", "scroll"}}
 		}
 	}
 	if m.showingLogs() {

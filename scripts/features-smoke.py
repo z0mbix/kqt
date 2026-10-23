@@ -611,6 +611,24 @@ with tempfile.TemporaryDirectory(prefix='kqt-features-') as temporary:
                 # Verify the saved view still owns its columns after visibility changes.
                 assert 'columns:' in config.read_text() and 'layout: inspector-test' in config.read_text()
                 send('b'); expect('Relations'); send('\x1b')
+                send('\t/cntprt'); expect('Inspector / cntprt'); expect('1/1 matches'); expect('containerPort')
+                send('\r'); expect('n/N: matches')
+                send('J'); expect('focused · JSON'); expect('1/1 matches'); expect('containerPort')
+                send('y/name'); expect('Inspector / cntprtname')
+                send('\x01\x0bname\r')
+                current=expect('matches · /name')
+                initial=re.search(r'(\d+)/(\d+) matches',current).groups()
+                assert int(initial[1])>1, 'expected multiple name lines'
+                send('n')
+                next_match=re.search(r'(\d+)/(\d+) matches',screen(raw,width,height,resize_events)).groups()
+                assert next_match[0]!=initial[0], 'n did not advance the inspector match'
+                send('N')
+                assert re.search(r'(\d+)/(\d+) matches',screen(raw,width,height,resize_events)).groups()==initial, 'N did not restore the preceding match'
+                send('/\x01\x0bzzzzzzzzzzzz'); expect('no matches')
+                send('\x1b'); expect('matches · /name')
+                send('\x1b'); expect('Tab/Esc: list')
+                assert 'matches · /name' not in screen(raw,width,height,resize_events), 'Escape retained the inspector search'
+                send('\x1b')
                 send(':inspector off\r'); expect('Inspector hidden')
             send(':inspector typo\r'); expect('Use :inspector')
         elif args.feature=='help':

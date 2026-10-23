@@ -147,5 +147,9 @@ func (m *model) setInspectorFormat(format string) {
 	m.settings.Config.InspectorFormat = format
 	m.updateInspector()
 	m.inspector.GotoTop()
+	if m.inspectorSearch.query != "" {
+		m.refreshInspectorSearch(true)
+		m.showInspectorMatch()
+	}
 	m.savePreferences(map[string]any{"inspector_format": format})
 }

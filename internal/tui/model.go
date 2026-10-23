@@ -178,6 +178,7 @@ type model struct {
 	detailFormat                             string
 	inspectedKey, inspectorContent           string
 	inspectorFocused                         bool
+	inspectorSearch                          inspectorSearchState
 	inspectorPreview                         *inspectorPreview
 	secretToken                              uint64
 	secretCancel                             context.CancelFunc
@@ -666,13 +667,15 @@ func (m *model) updateInspector() {
 			content = m.theme.renderJSON(m.manifest(o, true))
 		}
 	}
-	if content != m.inspectorContent {
-		m.inspectorContent = content
-		m.inspector.SetContent(content)
-	}
+	changed := content != m.inspectorContent
 	if key != m.inspectedKey {
+		m.resetInspectorSearch()
 		m.inspectedKey = key
 		m.inspector.GotoTop()
+	}
+	if changed {
+		m.inspectorContent = content
+		m.refreshInspectorSearch(false)
 	}
 	m.renderDetails()
 }
@@ -952,6 +955,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.copyFlash = ""
 		}
 	default:
+		if m.mode == "inspector-search" {
+			return m, m.updateInspectorSearch(msg)
+		}
 		if m.mode == "help-search" {
 			return m, m.updateHelpSearch(msg)
 		}

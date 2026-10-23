@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode"
 
+	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rivo/uniseg"
@@ -348,6 +349,11 @@ var jsonLogSeverity = regexp.MustCompile(`(?i)"(?:level|severity|lvl)"\s*:\s*"([
 func quotedLogValue(value string) string { data, _ := json.Marshal(value); return string(data) }
 
 func (t theme) highlightLogMatches(styled string, spans []logSpan) string {
+	return highlightTextMatches(styled, spans, t.selectionStyle().Bold(true))
+}
+
+// Preserve syntax colours outside matched graphemes in logs and inspectors.
+func highlightTextMatches(styled string, spans []logSpan, style lipgloss.Style) string {
 	if len(spans) == 0 {
 		return styled
 	}
@@ -371,7 +377,6 @@ func (t theme) highlightLogMatches(styled string, spans []logSpan) string {
 	// Walk both the spans and styled input once. Repeated ansi.Cut calls scan
 	// the entire line per match and freeze the UI on many disjoint matches.
 	var out, match strings.Builder
-	style := t.selectionStyle().Bold(true)
 	var pen uv.Style
 	flush := func() {
 		if match.Len() == 0 {

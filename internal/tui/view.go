@@ -64,7 +64,7 @@ func (m *model) inspectorDimensions() dimensions {
 func (m *model) resize() {
 	m.input.SetWidth(max(1, m.width-8))
 	m.resizeHistorySearch()
-	if m.mode == "bundle-save" || m.mode == "manifest-save" || m.showingLogs() && m.mode != "logs" || m.mode == "event-save" || m.mode == "debug-image" {
+	if m.mode == "inspector-search" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.showingLogs() && m.mode != "logs" || m.mode == "event-save" || m.mode == "debug-image" {
 		m.input.SetWidth(max(1, m.width-ansi.StringWidth(m.input.Prompt)-2))
 		m.input.SetCursor(m.input.Position()) // Reflow long paths immediately after a resize.
 	}
@@ -105,6 +105,9 @@ func (m *model) resize() {
 	m.inspector.SetHeight(max(1, d.height-2))
 	if d.width == 0 {
 		m.inspectorFocused = false
+		if m.mode == "inspector-search" {
+			m.resetInspectorSearch()
+		}
 	}
 	if m.showingHelp() {
 		m.refreshHelp(false)
@@ -292,6 +295,7 @@ func (m *model) inspectorView(d dimensions) string {
 			title = "Inspector · focused · " + m.secretLabel() + " · " + strings.ToUpper(m.inspectorFormat)
 		}
 	}
+	title += m.inspectorSearchLabel()
 	return m.frame(title, m.inspector.View(), d.width, d.height, m.inspectorFocused, hints...)
 }
 func (m *model) pickerView(width, height int) string {
@@ -456,7 +460,7 @@ func (m *model) baseView() tea.View {
 				status += " · resynced; history may have gaps"
 			}
 		}
-		if m.mode == "help-search" || m.mode == "command" || m.mode == "history-search" || m.mode == "filter" || m.showingLogs() && m.mode != "logs" || m.mode == "event-search" || m.mode == "event-save" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.mode == "action-confirm" || m.mode == "debug-image" {
+		if m.mode == "inspector-search" || m.mode == "help-search" || m.mode == "command" || m.mode == "history-search" || m.mode == "filter" || m.showingLogs() && m.mode != "logs" || m.mode == "event-search" || m.mode == "event-save" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.mode == "action-confirm" || m.mode == "debug-image" {
 			status = m.input.View()
 			token = "foreground"
 		}

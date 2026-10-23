@@ -871,3 +871,22 @@ The new group-manager scenario runs in CI and `just smoke`.
 
 The full local `just smoke` suite passed before publication, including all three
 layout/restart checks, operator workflows and every feature scenario.
+
+## v0.7.0 inspector search and display controls
+
+Inspector search tests cover live fuzzy matching, match navigation and wrapping,
+Unicode grapheme highlighting, theme changes, YAML/JSON switches, preserved
+viewport offsets, cancellation, and unchanged resource filtering and history.
+Resource changes and a disappearing pane clear the search. Secret searches only
+match explicitly visible values and retain no query or matches after hiding.
+
+The inspector terminal scenario exercises search, navigation, cancellation and
+format changes at 180x48 and 80x24. Log terminal checks cover the saved `H`
+highlighting toggle in framed and logs-only views. Context-picker checks cover
+compact alias/canonical descriptions and theme-aware production highlighting,
+including monochrome emphasis and selected-row contrast.
+
+The release tree passed Go race tests, vet, all fifteen Python tests and the full
+local `just smoke` suite: classic/inspector/bottom restart checks, operator
+workflows and every feature scenario. No live cluster changes were needed for
+these UI checks.

@@ -76,6 +76,9 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.mode == "help-search" {
 		return m.helpSearchKey(msg)
 	}
+	if m.mode == "inspector-search" {
+		return m.inspectorSearchKey(msg)
+	}
 	if m.mode == "help" {
 		if k == "/" {
 			return m.startHelpSearch()
@@ -386,6 +389,17 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.inspectorFocused {
+		if k == "/" {
+			return m.startInspectorSearch()
+		}
+		if k == "n" || k == "N" {
+			step := 1
+			if k == "N" {
+				step = -1
+			}
+			m.nextInspectorMatch(step)
+			return nil
+		}
 		if k == "J" {
 			m.setInspectorFormat("json")
 			return nil
@@ -395,6 +409,10 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		if k == "esc" {
+			if m.inspectorSearch.query != "" {
+				m.resetInspectorSearch()
+				return nil
+			}
 			m.inspectorFocused = false
 			return nil
 		}
@@ -1161,6 +1179,8 @@ Explore
   :copy json clean   Copy reusable JSON; :export yaml clean PATH saves YAML
   y / v, J           Open highlighted YAML / JSON
   Inspector: J / y   Switch focused inspector to JSON / YAML
+  Inspector: /       Fuzzy search document lines; Enter keeps, Esc cancels
+  Inspector: n / N   Next / previous matching line; Esc clears the search
   Details: J / y     Switch open manifest panel to JSON / YAML
   Secrets: x         Toggle decoded values; hidden by default
   L / P              Logs / previous logs: pod, deployment, statefulset
@@ -1249,6 +1269,13 @@ Live logs retain 4 MiB / 10,000 lines and follow at most 64 containers.
 
 Clipboard
 Drag copies visible text using the terminal's OSC52 clipboard support.
+
+Inspector search
+Focus the inspector with Tab or a click, then / searches YAML or JSON as you type.
+Matching ignores case and allows gaps (contport matches containerPort).
+The full document stays visible; n/N move between matching lines in document order.
+Enter keeps the search, / edits it, and Esc clears it before leaving the inspector.
+Searches are not saved. Selecting another resource clears the search.
 
 Metrics
 Metrics require the cluster Metrics API. cpu%/memory% compare pod limits

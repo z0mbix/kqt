@@ -17,6 +17,7 @@ type secretReadyMsg struct {
 }
 
 func (m *model) clearSecret() {
+	m.resetInspectorSearch()
 	m.secretToken++
 	if m.secretCancel != nil {
 		m.secretCancel()

@@ -151,6 +151,8 @@ Escape outside search to close it. Reopening help starts with the full view.
 | `:rollback REVISION` | Confirm restoring a retained Deployment pod template |
 | `d`, `y` / `v`, `J` | Describe, highlighted YAML, highlighted JSON |
 | `Tab`, then `J` / `y` | Focus inspector, then switch it to JSON / YAML |
+| `/` in the focused inspector | Fuzzy search YAML/JSON without hiding document lines |
+| `n` / `N` in the inspector | Next / previous matching line; `Esc` clears the search |
 | `x` on a Secret | Toggle decoded values in the inspector or details |
 | `L`, `P` | Live logs / previous log snapshots from a pod, deployment, or statefulset |
 | `w`, `s`, `f` in logs | Toggle line wrapping, follow latest lines, logs-only terminal |
@@ -199,6 +201,19 @@ resize. Selecting a saved layout applies that layout's visibility and position;
 Hiding the header gives its row to the resource list and inspector, or to
 the open logs/status view. The status and shortcut bars remain available. Press
 `z` again to restore it, or set `header_visible: false` in your config.
+
+Focus the inspector with `Tab` or a mouse click, then press `/` to search its
+YAML or JSON. Matching is case-insensitive and fuzzy: `contport` can find
+`containerPort`. Matches highlight as you type and the best matching line is
+brought into view, while the full document stays visible. The inspector title
+shows the current match and total matching lines, or `no matches`.
+Use arrows while typing, or `n` / `N` after `Enter`, to cycle through matching
+lines in document order. `Enter` keeps the search; `/` edits it; `Esc` while
+typing restores the previous search and scroll position. Outside the prompt,
+`Esc` clears the search, then another `Esc` returns focus to the list.
+Switching YAML/JSON keeps the query. Selecting a different resource clears it.
+Inspector searches are never saved to config or command history; hidden Secret
+values remain hidden and cannot match.
 
 Completion covers commands, resource names and aliases, theme/layout names,
 contexts, known namespaces, saved namespace groups and their `@` actions, and
