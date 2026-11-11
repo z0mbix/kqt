@@ -68,9 +68,13 @@ type Settings struct {
 	CommandHistory []string
 	historyPath    string
 	historyWarning string
+	explicitConfig bool
+	splitConfig    bool
 }
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
+
+const maxConfigSize = 1024 * 1024
 
 func validName(s string) bool { return identifier.MatchString(s) }
 
@@ -91,7 +95,7 @@ func readConfig(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > 1024*1024 {
+	if len(data) > maxConfigSize {
 		return nil, fmt.Errorf("configuration too large: %s", path)
 	}
 	return data, nil
@@ -111,6 +115,10 @@ func decodeConfig(path string, data []byte, c *config) error {
 	if filepath.Ext(path) == ".toml" {
 		return toml.NewDecoder(bytes.NewReader(data)).DisallowUnknownFields().Decode(c)
 	}
+	return decodeYAMLConfig(data, c)
+}
+
+func decodeYAMLConfig(data []byte, c *config) error {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(c); err != nil {
@@ -129,25 +137,27 @@ func LoadSettings(path string) (*Settings, error) {
 	if path == "" {
 		path = DefaultConfigPath()
 	}
-	source := path
-	data, err := readConfig(source)
-	if os.IsNotExist(err) && !explicit {
-		legacy := strings.TrimSuffix(path, ".yaml") + ".toml"
-		if legacyData, legacyErr := readConfig(legacy); legacyErr == nil {
-			source, data, err = legacy, legacyData, nil
-		} else if !os.IsNotExist(legacyErr) {
-			return nil, legacyErr
-		}
-	}
-	c := defaultConfig()
-	if err != nil && (explicit || !os.IsNotExist(err)) {
+	fragments, err := configFragments(path)
+	if err != nil {
 		return nil, err
 	}
-	if err == nil {
-		if err = decodeConfig(source, data, &c); err != nil {
-			return nil, fmt.Errorf("%s: %w", source, err)
-		}
+	c, err := loadConfig(path, explicit, fragments, nil)
+	if err != nil {
+		return nil, err
 	}
+	s, err := validateSettings(path, c)
+	if err != nil {
+		if fragments != nil {
+			return nil, fmt.Errorf("config %s with conf.d: %w", path, err)
+		}
+		return nil, err
+	}
+	s.explicitConfig, s.splitConfig = explicit, fragments != nil
+	return s, nil
+}
+
+func validateSettings(path string, c config) (*Settings, error) {
+	var err error
 	if c.Views == nil {
 		c.Views = map[string]viewConfig{}
 	}
@@ -306,6 +316,8 @@ func resolveLayouts(custom map[string]layoutProfile) (map[string]layoutProfile, 
 }
 
 const SampleConfig = `version: 1
+# Create conf.d/ beside this file to layer device-specific settings.
+# kqt loads conf.d/local.yaml last and saves preference changes there.
 theme: catppuccin-mocha
 layout: inspector
 view: pods

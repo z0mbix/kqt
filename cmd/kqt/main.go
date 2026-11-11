@@ -23,6 +23,11 @@ func command() *cobra.Command {
 	f.StringVar(&kubeconfig, "kubeconfig", "", "Kubeconfig file (default: KUBECONFIG or ~/.kube/config)")
 	f.StringVar(&config, "config", "", "UI configuration (default: ~/.config/kqt/config.yaml)")
 	f.StringVar(&o.Context, "context", "", "Kubeconfig context for this session")
+	if err := cmd.RegisterFlagCompletionFunc("context", func(_ *cobra.Command, _ []string, prefix string) ([]string, cobra.ShellCompDirective) {
+		return completeContexts(kubeconfig, config, o.Demo, prefix), cobra.ShellCompDirectiveNoFileComp
+	}); err != nil {
+		panic(err)
+	}
 	f.StringVarP(&o.Namespace, "namespace", "n", "", "Namespace or comma-separated namespaces (default: saved/context namespace)")
 	f.BoolVarP(&o.AllNamespaces, "all-namespaces", "A", false, "Browse all namespaces")
 	f.StringVar(&o.View, "view", "", "Initial resource name, kind, or alias (default: saved view)")
@@ -94,7 +99,7 @@ func command() *cobra.Command {
 		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Valid configuration: %s\n", s.Path)
 		return err
 	}}
-	cfg.Flags().BoolVar(&validate, "validate", false, "Validate UI configuration and custom themes")
+	cfg.Flags().BoolVar(&validate, "validate", false, "Validate merged UI configuration and custom themes")
 	cmd.AddCommand(cfg)
 	return cmd
 }

@@ -91,14 +91,25 @@ func (s *Settings) saveDebugProfile(p debugProfile) (string, error) {
 		return "", err
 	}
 	latest := s.Config
-	data, err := readConfig(s.Path)
-	if err == nil {
-		latest = defaultConfig()
-		if err = decodeConfig(s.Path, data, &latest); err != nil {
+	fragments, err := configFragments(s.Path)
+	if err != nil {
+		return "", err
+	}
+	if fragments != nil {
+		latest, err = loadConfig(s.Path, s.explicitConfig, fragments, nil)
+		if err != nil {
 			return "", fmt.Errorf("config changed: %w", err)
 		}
-	} else if !os.IsNotExist(err) {
-		return "", err
+	} else {
+		data, err := readConfig(s.Path)
+		if err == nil {
+			latest = defaultConfig()
+			if err = decodeConfig(s.Path, data, &latest); err != nil {
+				return "", fmt.Errorf("config changed: %w", err)
+			}
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
 	}
 	if err = validateDebugConfig(latest.Debug); err != nil {
 		return "", err

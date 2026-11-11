@@ -110,6 +110,74 @@ error colour. Matching ignores case and excludes `nonprod`, `non-prod`,
 its alias are checked; a separate production marker still takes precedence.
 The `no-color` theme uses reverse video and underlining for production contexts.
 
+### Shell completion
+
+With `kqt` on your `PATH`, enable completion for your shell below. The same
+examples work in Bash, zsh, and fish. Press Tab where you see `<Tab>`:
+
+```text
+kqt --context <Tab>                               # All context names and valid aliases
+kqt --context dev<Tab>                            # Names starting with dev
+kqt --kubeconfig ./team.yaml --context dev<Tab>    # Contexts from a specific kubeconfig
+kqt --config ./kqt.yaml --context dev<Tab>         # Use aliases from a specific kqt config
+```
+
+For example, if you have `dev-east`, `dev-west`, and `staging` contexts, typing
+`dev` offers `dev-east` and `dev-west`. Put `--kubeconfig` or `--config` before
+`--context` so the shell passes those paths to kqt. Completion reads local
+configuration without connecting to a cluster.
+
+#### Bash
+
+Install and load [bash-completion](https://github.com/scop/bash-completion#installation)
+first. Then load kqt's completion in your current session, or add this line to
+`~/.bashrc` after your bash-completion setup. If your Bash login shell doesn't
+source `~/.bashrc`, put it after the setup in `~/.bash_profile` instead:
+
+```bash
+source <(kqt completion bash)
+```
+
+Tab completes the common prefix or lists matches. To have repeated Tab presses
+[cycle through matches](https://www.gnu.org/software/bash/manual/html_node/Commands-For-Completion.html),
+optionally run the following. This changes Tab behaviour for all commands in
+the current Bash session; add it to the same startup file to keep it.
+
+```bash
+bind 'TAB: menu-complete'
+```
+
+#### zsh
+
+If your zsh setup hasn't already run `compinit`, initialize it with
+`autoload -Uz compinit && compinit`. Then load kqt's completion and enable Tab
+cycling for kqt. Add these two lines to `~/.zshrc` after `compinit` to keep it:
+
+```zsh
+source <(kqt completion zsh)
+zstyle ':completion:*:kqt:*' menu yes
+```
+
+#### fish
+
+Load kqt's completion in your current session:
+
+```fish
+kqt completion fish | source
+```
+
+If more than one match remains, fish opens its
+[completion menu](https://fishshell.com/docs/current/interactive.html#tab-completion).
+Use Tab, Shift+Tab, or the arrow keys to move through it.
+
+For future sessions, generate the completion file once. If you set
+`XDG_CONFIG_HOME`, use `$XDG_CONFIG_HOME/fish/completions` instead.
+
+```fish
+mkdir -p ~/.config/fish/completions
+kqt completion fish > ~/.config/fish/completions/kqt.fish
+```
+
 ## Explore
 
 Shortcut bars and the `?` / `:help` view highlight keys in the active theme's
@@ -514,8 +582,9 @@ content; ordinary Kubernetes RBAC still applies.
 ## Saved settings and layouts
 
 Settings live in `$XDG_CONFIG_HOME/kqt/config.yaml`, or
-`~/.config/kqt/config.yaml`. Missing files use defaults and are created when
-preferences are saved. View and namespace selection are saved automatically, per context.
+`~/.config/kqt/config.yaml` when `XDG_CONFIG_HOME` is unset. kqt uses built-in
+defaults for missing settings. View and namespace selection are saved
+automatically, per context.
 
 Use `:ns prod-dep,prod-ccp,prod-global,prod-system` to combine specific namespaces
 in one table, including live resources, events and pod metrics. The namespace
@@ -633,7 +702,7 @@ Built-in layouts are `classic` (no inspector), `inspector` (right pane at 120+
 columns), and `bottom` (bottom pane at 24+ rows). Named layouts can inherit one
 another, choose `none` / `right` / `bottom`, and override the inspector percentage,
 columns, sorting, and wide mode. `:layouts` searches all built-in and saved names.
-`:write NAME` saves the current configuration into the same YAML file; aliases
+`:write NAME` saves the current configuration as a named layout; aliases
 `:layout save NAME` and `:layouts NAME` also work. Smaller terminals collapse a
 right inspector; full-screen details stay available.
 
@@ -689,10 +758,59 @@ Config errors and inheritance cycles fail visibly. Preference writes preserve
 unrelated YAML settings and comments and replace the file atomically. An invalid
 file is not overwritten. Restart to load manual configuration changes.
 
-If no YAML configuration exists, kqt loads the default `config.toml` and writes
-its settings to `config.yaml` when preferences are saved, preserving the TOML
-file. Explicit TOML config paths are supported. No connection credentials are
-stored in kqt's UI config.
+If the default `config.yaml` is missing, kqt can read the older `config.toml`.
+In single-file mode, the next preference save migrates the settings to
+`config.yaml` and preserves the TOML file. Explicit TOML config paths are
+supported. Kubernetes connection credentials live in kubeconfig.
+
+### Split settings across files
+
+Create a `conf.d/` directory beside `config.yaml` to keep shared preferences
+separate from device-specific settings. For example, sync `config.yaml` through
+your dotfiles and keep `conf.d/20-work.yaml` on your work device.
+
+```text
+~/.config/kqt/
+├── config.yaml
+└── conf.d/
+    ├── 20-work.yaml
+    └── local.yaml    # created by kqt when it saves a preference
+```
+
+Put shared preferences such as the theme and layout in `config.yaml`.
+
+```yaml
+version: 1
+theme: ayu-mirage
+layout: inspector
+```
+
+Put aliases and namespace groups for your work clusters in `conf.d/20-work.yaml`.
+Under `contexts`, use the actual name from kubeconfig.
+
+```yaml
+context_aliases:
+  work: eks-work
+contexts:
+  eks-work:
+    namespace_groups:
+      production: [prod-dep, prod-ccp, prod-global, prod-system]
+```
+
+kqt loads built-in defaults, then the main config, then the non-hidden `.yaml`,
+`.yml`, and `.toml` files directly in `conf.d/` in filename order. Later files
+override earlier values. Nested maps merge by key, lists are replaced in full,
+and YAML `null` removes an inherited key so its built-in default can apply.
+
+The presence of `conf.d/` enables split mode. kqt saves changes made in the UI
+to `conf.d/local.yaml` and loads that file last. This includes automatic
+view and namespace saves and changes to aliases and namespace groups. Keep that
+file local to each device. Remove a local override to pick up the value from
+an earlier file. With `--config PATH`, kqt uses the `conf.d/` directory beside `PATH`.
+Run `kqt config --validate` to check the merged settings and restart kqt to
+apply manual edits.
+
+An existing `conf.d/kqt-local.yaml` still loads just before `conf.d/local.yaml`.
 
 ## Development and verification
 

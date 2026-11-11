@@ -1268,7 +1268,8 @@ Refresh and exit
 `
 
 const helpNotesText = `Preferences
-View and namespace are saved per context in ~/.config/kqt/config.yaml.
+View and namespace are saved per context.
+If conf.d/ exists beside config.yaml, kqt loads its files and saves to conf.d/local.yaml.
 Themes, layouts and inspector format are saved when applied.
 The theme name is shown for ten seconds after selection.
 

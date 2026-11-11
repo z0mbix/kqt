@@ -164,7 +164,15 @@ func (m *model) aliasCommand(arg string, remove bool) tea.Cmd {
 		}
 		aliases[name] = target
 	}
-	if err = m.settings.savePatch(map[string]any{"context_aliases": aliases}); err != nil {
+	var changes any = aliases
+	if m.settings.splitConfig {
+		var value any
+		if !remove {
+			value = aliases[name]
+		}
+		changes = map[string]any{name: value}
+	}
+	if err = m.settings.savePatch(map[string]any{"context_aliases": changes}); err != nil {
 		m.notice = "Unable to save context alias: " + kube.Safe(err.Error())
 		return nil
 	}
