@@ -36,7 +36,7 @@ func (m *model) headerView() string {
 		state = "loading"
 	}
 	stateToken := "muted"
-	if m.dataErr != "" {
+	if m.dataErr != "" || m.showSSOExpiry() {
 		state, stateToken = "stale / disconnected", "error"
 	}
 	watch, announcement := "", ""

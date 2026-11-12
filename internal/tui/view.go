@@ -460,6 +460,13 @@ func (m *model) baseView() tea.View {
 				status += " · resynced; history may have gaps"
 			}
 		}
+		if m.deviceLoginPrompt != "" {
+			status = " " + kube.Safe(m.deviceLoginPrompt)
+			token = "warning"
+		} else if m.showSSOExpiry() {
+			status = " AWS SSO expired · run aws sso login --profile PROFILE · Ctrl+R retries"
+			token = "error"
+		}
 		if m.mode == "inspector-search" || m.mode == "details-search" || m.mode == "help-search" || m.mode == "command" || m.mode == "history-search" || m.mode == "filter" || m.showingLogs() && m.mode != "logs" || m.mode == "event-search" || m.mode == "event-save" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.mode == "action-confirm" || m.mode == "debug-image" {
 			status = m.input.View()
 			token = "foreground"

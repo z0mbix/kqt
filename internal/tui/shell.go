@@ -124,7 +124,11 @@ type shellCommand struct {
 
 func (c *shellCommand) SetStdin(in io.Reader)   { c.in = in }
 func (c *shellCommand) SetStdout(out io.Writer) { c.out = out }
-func (c *shellCommand) SetStderr(out io.Writer) { c.errOut = out }
+func (c *shellCommand) SetStderr(out io.Writer) {
+	if c.errOut == nil {
+		c.errOut = out
+	}
+}
 func (c *shellCommand) Run() error {
 	file, ok := c.in.(*os.File)
 	if !ok || !term.IsTerminal(file.Fd()) {
@@ -284,7 +288,7 @@ func (m *model) runShell() tea.Cmd {
 	m.mode = "shell"
 	g, token := m.generation, m.shellToken
 	m.promoteHistoryExecution("shell", token)
-	adapter := &shellCommand{ctx: ctx, executor: m.backend.(kube.PodExecutor), target: m.shellObject, container: m.shellContainer, command: args, heading: "kqt shell · " + kube.Safe(m.contextName) + " · " + kube.Safe(m.shellObject.GetNamespace()+"/"+m.shellObject.GetName()+":"+m.shellContainer)}
+	adapter := &shellCommand{ctx: ctx, errOut: m.terminalStderr, executor: m.backend.(kube.PodExecutor), target: m.shellObject, container: m.shellContainer, command: args, heading: "kqt shell · " + kube.Safe(m.contextName) + " · " + kube.Safe(m.shellObject.GetNamespace()+"/"+m.shellObject.GetName()+":"+m.shellContainer)}
 	adapter.disconnectHint = m.shortcuts("", shortcut{"Ctrl+]", "disconnect"})
 	return tea.Exec(adapter, func(err error) tea.Msg { return shellClosedMsg{g, token, err} })
 }

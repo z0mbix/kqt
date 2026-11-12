@@ -8,11 +8,12 @@ import (
 	"github.com/z0mbix/kqt/internal/kube"
 )
 
-func Run(ctx context.Context, s *Settings, o Options, l *kube.Loader, in, out *os.File) error {
+func Run(ctx context.Context, s *Settings, o Options, l *kube.Loader, in, out, stderr *os.File, credentials <-chan CredentialNotice) error {
 	m, err := newModel(ctx, s, o, l)
 	if err != nil {
 		return err
 	}
+	m.terminalStderr, m.credentials = stderr, credentials
 	defer m.close()
 	_, err = tea.NewProgram(m, tea.WithContext(ctx), tea.WithInput(in), tea.WithOutput(out)).Run()
 	return err
@@ -32,4 +33,26 @@ func (s *Settings) SelectLayout(name string) bool {
 		return true
 	}
 	return false
+}
+
+type CredentialNotice struct {
+	AWSSSOExpired     bool
+	DeviceLoginPrompt string
+}
+
+func (m *model) waitForCredentialNotice() tea.Cmd {
+	if m.credentials == nil {
+		return nil
+	}
+	ctx, notices := m.ctx, m.credentials
+	return func() tea.Msg {
+		select {
+		case notice, ok := <-notices:
+			if ok {
+				return notice
+			}
+		case <-ctx.Done():
+		}
+		return nil
+	}
 }

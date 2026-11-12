@@ -541,7 +541,7 @@ func (m *model) key(msg tea.KeyPressMsg) tea.Cmd {
 	case "I":
 		return m.openPicker("inspector-position")
 	case "ctrl+r":
-		if m.backend == nil {
+		if m.backend == nil || strings.Contains(m.discoveryWarning, "getting credentials:") {
 			return m.connect(m.contextName)
 		}
 		return m.refreshResources()

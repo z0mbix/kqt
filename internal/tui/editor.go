@@ -293,6 +293,7 @@ func (m *model) editorReady(v editReadyMsg) tea.Cmd {
 	m.mode = "editing"
 	m.notice = "Editor open · changes will be reviewed before applying"
 	process := exec.CommandContext(m.session.ctx, args[0], append(args[1:], buffer.path)...)
+	process.Stderr = m.terminalStderr
 	return tea.ExecProcess(process, func(err error) tea.Msg { return editorClosedMsg{v.generation, v.token, buffer, err} })
 }
 func (m *model) editorClosed(v editorClosedMsg) tea.Cmd {

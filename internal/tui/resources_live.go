@@ -101,9 +101,24 @@ func (m *model) startResourceWatch() tea.Cmd {
 	}()
 	return waitResources(ctx, m.generation, m.resourceToken, f)
 }
+func (m *model) credentialsRecovered() {
+	m.deviceLoginPrompt = ""
+	if m.ssoExpired {
+		m.ssoExpired = false
+		m.clearResourceWatchError()
+	}
+}
+
+func (m *model) clearResourceWatchError() {
+	if m.notice == "Polling resources: "+m.resourceWatchError {
+		m.notice = ""
+	}
+	m.resourceWatchError = ""
+}
+
 func (m *model) refreshResources() tea.Cmd {
 	m.stopResourceWatch()
-	m.resourceWatchError = ""
+	m.clearResourceWatchError()
 	if m.requestCancel != nil {
 		m.requestCancel()
 	}
@@ -156,6 +171,7 @@ func (m *model) resourceBatch(v resourceBatchMsg) tea.Cmd {
 				changed = true
 			}
 			m.dataErr = ""
+			m.credentialsRecovered()
 			m.lastRefresh = time.Now()
 		}
 	}
@@ -173,6 +189,7 @@ func (m *model) resourceBatch(v resourceBatchMsg) tea.Cmd {
 		m.rebuild(key)
 	}
 	if v.done {
+		m.deviceLoginPrompt = ""
 		m.stopResourceWatch()
 		if v.err != nil {
 			m.resourceWatchError = kube.Safe(v.err.Error())

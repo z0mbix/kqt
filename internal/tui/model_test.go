@@ -71,6 +71,46 @@ func TestRejectOldResultsAndRetainStaleSnapshot(t *testing.T) {
 		t.Fatal("stale snapshot lacks visible label")
 	}
 }
+func TestSSOExpiryHintFollowsCredentialFailureAndRecovery(t *testing.T) {
+	m := demoModel(t)
+	rows := m.rows
+	failed := snapshotMsg{generation: m.generation, request: m.request, err: errors.New("getting credentials: exec: executable aws failed with exit code 254")}
+	m.Update(failed)
+	const hint = "AWS SSO expired"
+	hasHint := func() bool { return strings.Contains(ansi.Strip(m.View().Content), hint) }
+	if hasHint() {
+		t.Fatal("generic exec error reported an expired SSO session")
+	}
+	m.Update(CredentialNotice{AWSSSOExpired: true})
+	if !hasHint() || len(m.rows) != len(rows) {
+		t.Fatal("expiry should be shown alongside the last good rows")
+	}
+	m.Update(snapshotMsg{generation: m.generation, request: m.request, rows: rows})
+	if hasHint() || m.ssoExpired {
+		t.Fatal("successful refresh kept the SSO expiry state")
+	}
+	m.Update(CredentialNotice{AWSSSOExpired: true})
+	_ = m.connect("other")
+	if m.ssoExpired {
+		t.Fatal("context switch kept the previous SSO expiry state")
+	}
+}
+
+func TestDeviceLoginPromptFitsAndClears(t *testing.T) {
+	m := demoModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 20})
+	const prompt = "KQT1-TEST at microsoft.com/devicelogin"
+	m.Update(CredentialNotice{DeviceLoginPrompt: prompt})
+	hasPrompt := func() bool { return strings.Contains(ansi.Strip(m.View().Content), prompt) }
+	if !hasPrompt() {
+		t.Fatal("device sign-in prompt was hidden or truncated")
+	}
+	m.Update(snapshotMsg{generation: m.generation, request: m.request, rows: m.rows})
+	if hasPrompt() {
+		t.Fatal("device sign-in prompt remained after refresh")
+	}
+}
+
 func TestSelectionAndIndependentInspector(t *testing.T) {
 	m := demoModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 180, Height: 24})

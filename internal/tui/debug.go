@@ -325,7 +325,7 @@ func (m *model) debugStarted(v debugStartedMsg) tea.Cmd {
 	ctx, cancel := context.WithCancel(m.session.ctx)
 	m.debugCancel = cancel
 	m.mode = "shell"
-	command := &shellCommand{ctx: ctx, attacher: m.backend.(kube.EphemeralDebugger), spdyOnly: v.plan.SPDYOnly, target: v.pod, container: v.plan.Container.Name,
+	command := &shellCommand{ctx: ctx, errOut: m.terminalStderr, attacher: m.backend.(kube.EphemeralDebugger), spdyOnly: v.plan.SPDYOnly, target: v.pod, container: v.plan.Container.Name,
 		heading: "Debug · " + kube.Safe(debugIdentity(v.plan)) + " · " + v.plan.Container.Name, disconnectHint: "Ctrl+] disconnects (container may keep running); exit stops the shell"}
 	return tea.Exec(command, func(err error) tea.Msg {
 		return debugClosedMsg{v.generation, v.token, v.plan.Container.Name, command.disconnected, command.outputSeen.Load(), err}

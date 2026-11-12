@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -127,6 +128,10 @@ type model struct {
 	relations                                []kube.Relation
 	forwardDetail                            uint64
 	ctx                                      context.Context
+	terminalStderr                           io.Writer
+	credentials                              <-chan CredentialNotice
+	ssoExpired                               bool
+	deviceLoginPrompt                        string
 	settings                                 *Settings
 	options                                  Options
 	loader                                   *kube.Loader
@@ -316,9 +321,9 @@ func newModel(ctx context.Context, s *Settings, o Options, l *kube.Loader) (*mod
 }
 func (m *model) Init() tea.Cmd {
 	if m.contextName == "" {
-		return m.openPicker("contexts")
+		return tea.Batch(m.openPicker("contexts"), m.waitForCredentialNotice())
 	}
-	return tea.Batch(m.connect(m.contextName), m.themeTimeout())
+	return tea.Batch(m.connect(m.contextName), m.themeTimeout(), m.waitForCredentialNotice())
 }
 func (m *model) close() {
 	m.cancelInspectorPreview()
@@ -346,6 +351,8 @@ func (m *model) close() {
 }
 func (m *model) connect(name string) tea.Cmd {
 	m.close()
+	m.ssoExpired = false
+	m.deviceLoginPrompt = ""
 	m.resourceWatchError = ""
 	m.generation++
 	m.request++
@@ -418,6 +425,10 @@ func (m *model) connect(name string) tea.Cmd {
 		return connectedMsg{g, b, resources, server, ns, warning, nil}
 	}
 }
+func (m *model) showSSOExpiry() bool {
+	return m.ssoExpired && (m.dataErr != "" || m.resourceWatchError != "" || m.namespaceWarning != "")
+}
+
 func (m *model) fetch() tea.Cmd {
 	if m.backend == nil || m.busy || m.mode == "shell" || m.mode == "editing" || m.mode == "edit-loading" {
 		return nil
@@ -729,6 +740,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	run := m.historyExecutionFor(msg)
 	defer m.observeCommandResult(run, msg)
 	switch v := msg.(type) {
+	case CredentialNotice:
+		m.ssoExpired = m.ssoExpired || v.AWSSSOExpired
+		if v.DeviceLoginPrompt != "" {
+			m.deviceLoginPrompt = v.DeviceLoginPrompt
+		}
+		return m, m.waitForCredentialNotice()
 	case overviewMsg:
 		return m, m.overviewReady(v)
 	case overviewTickMsg:
@@ -769,6 +786,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.generation != m.generation {
 			return m, nil
 		}
+		m.deviceLoginPrompt = ""
 		m.busy = false
 		if v.err != nil {
 			m.dataErr = kube.Safe(v.err.Error())
@@ -798,6 +816,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.generation != m.generation || v.request != m.request {
 			return m, nil
 		}
+		m.deviceLoginPrompt = ""
 		m.busy = false
 		if v.err != nil && !kube.PartialNamespaces(v.err) {
 			m.dataErr = kube.Safe(v.err.Error())
@@ -822,6 +841,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.rows[i] = kube.Redacted(o)
 			}
 			m.dataErr = ""
+			if v.err == nil {
+				m.credentialsRecovered()
+			}
 			m.namespaceWarning = ""
 			if v.err != nil {
 				m.namespaceWarning = kube.Safe(v.err.Error())

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -53,7 +54,7 @@ func command() *cobra.Command {
 		}
 		return s, nil
 	}
-	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
+	cmd.RunE = func(cmd *cobra.Command, _ []string) (runErr error) {
 		o.ReadOnlyExplicit = cmd.Flags().Changed("read-only")
 		o.ScopeExplicit = cmd.Flags().Changed("namespace") || cmd.Flags().Changed("all-namespaces")
 		s, err := settings()
@@ -76,7 +77,17 @@ func command() *cobra.Command {
 				return err
 			}
 		}
-		return tui.Run(cmd.Context(), s, o, l, os.Stdin, os.Stdout)
+		stderr := os.Stderr
+		var credentials <-chan tui.CredentialNotice
+		if !o.Demo && term.IsTerminal(stderr.Fd()) {
+			capture, err := captureTerminalStderr(stderr)
+			if err != nil {
+				return fmt.Errorf("isolate terminal stderr: %w", err)
+			}
+			stderr, credentials = capture.terminal, capture.credentials
+			defer func() { runErr = errors.Join(runErr, capture.restore()) }()
+		}
+		return tui.Run(cmd.Context(), s, o, l, os.Stdin, os.Stdout, stderr, credentials)
 	}
 	cmd.AddCommand(&cobra.Command{Use: "themes", Short: "List bundled and custom themes without connecting to a cluster", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		s, err := settings()
