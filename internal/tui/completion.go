@@ -28,6 +28,9 @@ func (m *model) completeCommand(reverse bool) {
 		parts := strings.SplitN(value, " ", 2)
 		if len(parts) == 1 {
 			candidates = append(candidates, commandNames...)
+			if m.route.resource.ID() == "nodes" {
+				candidates = append(candidates, "nodeviews")
+			}
 			for _, r := range m.resources {
 				candidates = append(candidates, r.ID(), r.GVR.Resource, strings.ToLower(r.Kind))
 				candidates = append(candidates, r.Aliases...)
@@ -75,6 +78,13 @@ func (m *model) completeCommand(reverse bool) {
 				}
 			case "ns", "namespace":
 				names = m.namespaceCompletions(parts[1])
+			case "nodeviews":
+				for _, name := range []string{"@", "@save ", "@edit ", "@delete ", "@default ", "@standard", "@default standard"} {
+					names = append(names, name)
+				}
+				for name := range m.settings.Config.Contexts[m.contextName].NodeViews {
+					names = append(names, "@"+name, "@edit "+name, "@default "+name, "@delete "+name)
+				}
 			case "can-i":
 				names = []string{"get", "list", "watch", "patch", "delete", "create", "get log", "get exec", "create exec", "get portforward", "create portforward"}
 			case "copy", "export":

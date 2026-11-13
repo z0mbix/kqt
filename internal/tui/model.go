@@ -157,6 +157,8 @@ type model struct {
 	theme, previousTheme                     theme
 	layout                                   string
 	views                                    map[string]viewConfig
+	nodeView                                 string
+	nodeViewEditor                           *nodeViewEditor
 	inspectorFormat                          string
 	themeUntil                               time.Time
 	themeTimer                               uint64
@@ -378,6 +380,7 @@ func (m *model) connect(name string) tea.Cmd {
 	m.metricsWarning = ""
 	m.forwards = nil
 	if m.contextName != name {
+		m.nodeView = ""
 		m.route.namespace = ""
 		m.options.Namespace = ""
 		m.options.AllNamespaces = false
@@ -525,6 +528,9 @@ func (m *model) navigate(r route, remember bool) tea.Cmd {
 	m.usage = nil
 	m.metricsWarning = ""
 	m.inspectorFocused = false
+	if m.route.resource.ID() != r.resource.ID() {
+		m.nodeView = ""
+	}
 	m.route = r
 	m.applyView()
 	m.updateInspector()
@@ -538,10 +544,7 @@ func (m *model) applyView() {
 		m.sortColumn = "lastseen"
 	}
 	m.descending = false
-	v, ok := m.views[m.route.resource.ID()]
-	if !ok {
-		v = m.views[m.route.resource.GVR.Resource]
-	}
+	v := m.currentViewConfig()
 	if v.Sort != "" {
 		m.sortColumn = v.Sort
 		m.sortExplicit = true
@@ -549,16 +552,24 @@ func (m *model) applyView() {
 	m.descending = v.Descending
 	m.orderSelected = m.sortColumn
 }
-func (m *model) columns() []string {
+func (m *model) currentViewConfig() viewConfig {
+	if name := m.activeNodeView(); name != "" {
+		return m.settings.Config.Contexts[m.contextName].NodeViews[name]
+	}
 	v, ok := m.views[m.route.resource.ID()]
 	if !ok {
 		v = m.views[m.route.resource.GVR.Resource]
 	}
+	return v
+}
+
+func (m *model) columns() []string {
+	v := m.currentViewConfig()
 	cols := slices.Clone(v.Columns)
 	if len(cols) == 0 {
 		cols = kube.DefaultColumns(m.route.resource.Kind)
 	}
-	if m.wide {
+	if m.wide && m.activeNodeView() == "" {
 		for _, c := range []string{"kind", "labels"} {
 			if !slices.Contains(cols, c) {
 				cols = append(cols, c)
@@ -988,7 +999,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == "command" || m.mode == "history-search" || m.mode == "filter" || m.mode == "picker" || m.mode == "namespace-group" && m.namespaceGroup.action != "delete" || m.showingLogs() && m.mode != "logs" || m.mode == "event-search" || m.mode == "event-save" || m.mode == "bundle-save" || m.mode == "manifest-save" || m.mode == "action-confirm" || m.mode == "debug-image" {
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
-			if m.mode == "picker" && m.pickerKind == "namespace-groups" {
+			if m.mode == "picker" && (m.pickerKind == "namespace-groups" || m.pickerKind == "node-views" || m.pickerKind == "node-view-labels") {
 				m.filterChoices()
 			}
 			return m, cmd

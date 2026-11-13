@@ -125,6 +125,12 @@ func (m *model) statusToken(phase string) string {
 	return "foreground"
 }
 func heading(c string) string {
+	if key, ok := strings.CutPrefix(c, kube.LabelColumnPrefix); ok {
+		if _, name, qualified := strings.Cut(key, "/"); qualified {
+			key = name
+		}
+		return strings.ToUpper(key)
+	}
 	if strings.HasPrefix(c, "/") {
 		parts := strings.Split(c, "/")
 		return strings.ToUpper(parts[len(parts)-1])
@@ -262,6 +268,9 @@ func (m *model) table(width, height int) string {
 		title = "resources"
 	}
 	title += fmt.Sprintf(" [%d]", len(m.visible))
+	if name := m.activeNodeView(); name != "" {
+		title += " · " + name
+	}
 	for _, scope := range []string{m.route.labels, m.route.fields} {
 		if scope != "" {
 			title += " · " + scope
@@ -302,7 +311,7 @@ func (m *model) pickerView(width, height int) string {
 	var lines []string
 	lines = append(lines, fit(m.input.View(), width-2), "")
 	capacity := max(1, height-6)
-	if m.pickerKind == "namespace-groups" {
+	if m.pickerKind == "namespace-groups" || m.pickerKind == "node-views" {
 		capacity = max(1, height-8)
 	}
 	start := min(max(0, m.pickerIndex-capacity+1), max(0, len(m.matches)-capacity))
@@ -315,6 +324,9 @@ func (m *model) pickerView(width, height int) string {
 		}
 		if m.pickerKind == "namespace-groups" {
 			label = "@" + label
+		}
+		if m.pickerKind == "node-view-labels" {
+			label = c.description + " " + kube.Safe(c.name)
 		}
 		if m.pickerKind == "relations" {
 			label = kube.Safe(c.description)
@@ -329,6 +341,8 @@ func (m *model) pickerView(width, height int) string {
 	if len(m.matches) == 0 {
 		if m.pickerKind == "namespace-groups" && len(m.choices) == 0 {
 			lines = append(lines, "No saved groups in this context.")
+		} else if m.pickerKind == "node-view-labels" && len(m.choices) == 0 {
+			lines = append(lines, "No node labels available. Open this picker after the nodes load.")
 		} else {
 			lines = append(lines, "No matches")
 		}
@@ -343,6 +357,9 @@ func (m *model) pickerView(width, height int) string {
 	if m.pickerKind == "rollouts" {
 		hints = []shortcut{{"↑/↓", "select"}, {"Enter", "details"}, {"Ctrl+R", "reload"}, {"Esc", "close"}}
 	}
+	if m.pickerKind == "node-view-labels" {
+		hints = []shortcut{{"↑/↓", "move"}, {"Enter", "toggle"}, {"Ctrl+S", "save"}, {"Esc", "cancel"}}
+	}
 	hintLine := m.shortcuts(" · ", hints...)
 	if m.pickerKind != "inspector-position" {
 		hintLine = m.theme.style("muted").Render(" Type to search · ") + hintLine
@@ -351,9 +368,18 @@ func (m *model) pickerView(width, height int) string {
 	if m.pickerKind == "namespace-groups" {
 		lines = append(lines, m.shortcuts(" · ", shortcut{"Ctrl+N", "save current"}, shortcut{"Ctrl+E", "edit"}, shortcut{"Ctrl+R", "rename"}, shortcut{"Ctrl+D", "delete"}))
 	}
+	if m.pickerKind == "node-views" {
+		lines = append(lines, m.shortcuts(" · ", shortcut{"Ctrl+N", "new"}, shortcut{"Ctrl+E", "edit"}, shortcut{"Ctrl+T", "set default"}, shortcut{"Ctrl+D", "delete"}))
+	}
 	title := strings.Title(m.pickerKind)
 	if m.pickerKind == "namespace-groups" {
 		title = "Namespace groups · " + m.contextLabel(m.contextName)
+	}
+	if m.pickerKind == "node-views" {
+		title = "Node views · " + m.contextLabel(m.contextName)
+	}
+	if m.pickerKind == "node-view-labels" {
+		title = "Node label columns · " + m.nodeViewEditor.name
 	}
 	if m.pickerKind == "inspector-position" {
 		title = "Inspector position · preview"

@@ -768,6 +768,8 @@ func (m *model) command(value string) tea.Cmd {
 		}
 	case "write":
 		m.saveLayout(arg)
+	case "nodeviews":
+		return m.nodeViewCommand(arg)
 	case "header":
 		m.headerCommand(arg)
 	case "inspector":
@@ -910,6 +912,15 @@ func (m *model) openPicker(kind string) tea.Cmd {
 	switch kind {
 	case "namespace-groups":
 		m.choices = m.namespaceGroupChoices()
+	case "node-views":
+		m.choices = m.nodeViewChoices()
+		for i, c := range m.choices {
+			if c.name == m.activeNodeView() {
+				m.pickerIndex = i
+			}
+		}
+	case "node-view-labels":
+		m.choices = m.nodeLabelChoices()
 	case "inspector-position":
 		m.beginInspectorPreview()
 		m.choices = []choice{{"right", "beside the resource list"}, {"bottom", "below the resource list"}}
@@ -1025,6 +1036,11 @@ func (m *model) pickerKey(msg tea.KeyPressMsg) tea.Cmd {
 			return cmd
 		}
 	}
+	if m.pickerKind == "node-views" || m.pickerKind == "node-view-labels" {
+		if cmd, handled := m.nodeViewPickerKey(msg.String()); handled {
+			return cmd
+		}
+	}
 	switch msg.String() {
 	case "ctrl+r":
 		if m.pickerKind == "rollouts" {
@@ -1089,6 +1105,8 @@ func (m *model) pickerKey(msg tea.KeyPressMsg) tea.Cmd {
 		switch m.pickerKind {
 		case "namespace-groups":
 			return m.namespaceCommand("@" + c.name)
+		case "node-views":
+			m.selectNodeView(c.name)
 		case "debug-image-source":
 			if c.name == "Use BusyBox" {
 				return m.useBusyBoxDebugImage()
@@ -1258,6 +1276,10 @@ Appearance and saved settings
   w                  Wide fields
   :sort              Column picker; :sort COLUMN asc|desc sets an order
   :columns name,status,age   Configure columns for the active layout
+  :nodeviews         Manage named node views for the current kube context
+  Node views         Ctrl+N create, Ctrl+E edit, Ctrl+T set default, Ctrl+D delete
+  Node label picker  Type to search, Enter toggles a column, Ctrl+S saves
+  label:KEY          Use a Kubernetes label key as its own column
   /spec/replicas     JSON Pointer column (also supported in config)
   Pickers            Type to search; arrows / Ctrl+J/K move; Enter selects
 

@@ -165,7 +165,20 @@ func Age(o unstructured.Unstructured) string {
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
 }
+
+const LabelColumnPrefix = "label:"
+
 func Column(o unstructured.Unstructured, id string) string {
+	if key, ok := strings.CutPrefix(id, LabelColumnPrefix); ok {
+		value, found, _ := unstructured.NestedString(o.Object, "metadata", "labels", key)
+		if !found {
+			return "—"
+		}
+		if value == "" {
+			return "✓"
+		}
+		return value
+	}
 	if o.GetKind() == "Event" {
 		switch id {
 		case "lastseen":

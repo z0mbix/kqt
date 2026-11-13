@@ -717,6 +717,40 @@ smaller terminals keep horizontal scrolling. Labels use `key=value, key=value`
 spacing, with distinct theme colours for keys, values, equals signs and commas.
 The selected row keeps readable contrast, and `no-color` uses text emphasis.
 
+### Saved node views
+
+Open `:nodes`, then `:nodeviews`. Press `Ctrl+N`, name the view, and press Enter.
+Search for label keys such as `topology.kubernetes.io/zone` or your team's node
+pool label. Press Enter to toggle each label column and `Ctrl+S` to save. kqt
+applies the saved view and shows its name above the table. Use `Ctrl+E` in the
+picker to edit it and `Ctrl+T` to make it the default whenever you open Nodes in
+that kube context. Choose `standard` to use the current layout's node columns.
+
+Saved node views show the chosen columns in both regular and wide mode. Label
+keys appear as short column headings. `✓` marks a present label with an empty
+value and `—` marks a missing label. For a key that is absent from the loaded
+nodes, use `:columns name,status,age,label:example.com/pool` with the saved view
+active. Sorting and `:columns` changes are saved to that view.
+
+Use `:nodeviews @NAME` to apply a view, `:nodeviews @save NAME` to create one,
+`:nodeviews @edit NAME` to edit it, or `:nodeviews @default NAME` to set the
+default. `:nodeviews @default standard` clears the custom default.
+`:nodeviews @delete NAME` removes a saved view. In split config, edits are saved
+to `conf.d/local.yaml`. To define a view by hand, use the actual kubeconfig
+context name under `contexts`.
+
+```yaml
+contexts:
+  eks-work:
+    default_node_view: capacity
+    node_views:
+      capacity:
+        columns: [name, status, label:topology.kubernetes.io/zone, label:example.com/pool]
+        sort: name
+```
+
+### Themes
+
 kqt bundles 37 themes, including `material`, `palenight`, `dracula`, `darcula`,
 `monokai`, `ubuntu`, `lemonade`, and `pink-lemonade`. The VS Code references are
 Radu Matei's Ubuntu Color Theme, Denner's Lemonade, and Casseopeian's light pink

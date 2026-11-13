@@ -84,10 +84,7 @@ func (m *model) setOrder(column string, descending bool) {
 	m.orderSelected, m.sortExplicit = column, true
 	m.eventTail = false
 	m.rebuild(key)
-	view, ok := m.views[m.route.resource.ID()]
-	if !ok {
-		view = m.views[m.route.resource.GVR.Resource]
-	}
+	view := m.currentViewConfig()
 	if len(view.Columns) == 0 {
 		view.Columns = kube.DefaultColumns(m.route.resource.Kind)
 	}

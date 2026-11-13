@@ -80,6 +80,9 @@ func (s *Settings) savePatch(patch map[string]any) error {
 	if err = normalizeNamespacePreferences(&check); err != nil {
 		return err
 	}
+	if err = validateNodeViews(check.Contexts); err != nil {
+		return err
+	}
 	if err = validateLogPreferences(check.Logs); err != nil {
 		return err
 	}
@@ -321,15 +324,14 @@ func (m *model) saveLayout(name string) {
 	p := m.settings.Layouts[m.layout]
 	p.Inspector = m.inspectorProfile().Inspector
 	p.Views = cloneViews(m.views)
-	v, ok := p.Views[m.route.resource.ID()]
-	if !ok {
-		v = m.views[m.route.resource.GVR.Resource]
+	if m.activeNodeView() == "" {
+		v := m.currentViewConfig()
+		if len(v.Columns) == 0 {
+			v.Columns = kube.DefaultColumns(m.route.resource.Kind)
+		}
+		v.Sort, v.Descending = m.sortColumn, m.descending
+		p.Views[m.route.resource.ID()] = v
 	}
-	if len(v.Columns) == 0 {
-		v.Columns = kube.DefaultColumns(m.route.resource.Kind)
-	}
-	v.Sort, v.Descending = m.sortColumn, m.descending
-	p.Views[m.route.resource.ID()] = v
 	wide := m.wide
 	p.Wide = &wide
 	p.Extends = ""
@@ -361,6 +363,10 @@ func viewPreferences(v viewConfig) map[string]any {
 }
 
 func (m *model) saveColumns(v viewConfig) {
+	if name := m.activeNodeView(); name != "" {
+		m.writeNodeView(name, &v)
+		return
+	}
 	name := m.route.resource.ID()
 	m.views[name] = v
 	// Preserve an explicit false when merging into a previously descending view.

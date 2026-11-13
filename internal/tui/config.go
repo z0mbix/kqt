@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
+	"github.com/z0mbix/kqt/internal/kube"
 	yaml "go.yaml.in/yaml/v3"
+	"k8s.io/apimachinery/pkg/api/validate/content"
 )
 
 type viewConfig struct {
@@ -21,10 +23,12 @@ type viewConfig struct {
 	Descending bool     `toml:"descending,omitempty" yaml:"descending,omitempty"`
 }
 type contextState struct {
-	View            string              `toml:"view,omitempty" yaml:"view,omitempty"`
-	Namespace       string              `toml:"namespace,omitempty" yaml:"namespace,omitempty"`
-	AllNamespaces   bool                `toml:"all_namespaces,omitempty" yaml:"all_namespaces,omitempty"`
-	NamespaceGroups map[string][]string `toml:"namespace_groups,omitempty" yaml:"namespace_groups,omitempty"`
+	View            string                `toml:"view,omitempty" yaml:"view,omitempty"`
+	Namespace       string                `toml:"namespace,omitempty" yaml:"namespace,omitempty"`
+	AllNamespaces   bool                  `toml:"all_namespaces,omitempty" yaml:"all_namespaces,omitempty"`
+	NamespaceGroups map[string][]string   `toml:"namespace_groups,omitempty" yaml:"namespace_groups,omitempty"`
+	NodeViews       map[string]viewConfig `toml:"node_views,omitempty" yaml:"node_views,omitempty"`
+	DefaultNodeView string                `toml:"default_node_view,omitempty" yaml:"default_node_view,omitempty"`
 }
 type layoutProfile struct {
 	Wide             *bool                 `toml:"wide,omitempty" yaml:"wide,omitempty"`
@@ -199,6 +203,9 @@ func validateSettings(path string, c config) (*Settings, error) {
 	if err = normalizeNamespacePreferences(&c); err != nil {
 		return nil, err
 	}
+	if err = validateNodeViews(c.Contexts); err != nil {
+		return nil, err
+	}
 	d, err := time.ParseDuration(c.Refresh)
 	if err != nil || d < 500*time.Millisecond || d > time.Minute {
 		return nil, fmt.Errorf("refresh_interval must be between 500ms and 1m")
@@ -239,6 +246,9 @@ func validateViews(views map[string]viewConfig) error {
 	return nil
 }
 func validColumn(s string) bool {
+	if key, ok := strings.CutPrefix(s, kube.LabelColumnPrefix); ok {
+		return len(content.IsLabelKey(key)) == 0
+	}
 	if strings.HasPrefix(s, "/") {
 		return len(s) <= 256 && !strings.ContainsAny(s, "\n\r\x1b") && !regexp.MustCompile(`~([^01]|$)`).MatchString(s)
 	}
@@ -334,6 +344,10 @@ all_namespaces: false
 #     namespace: prod-dep,prod-ccp,prod-global,prod-system
 #     namespace_groups:
 #       production: [prod-dep, prod-ccp, prod-global, prod-system]
+#     default_node_view: capacity # Set from :nodeviews in the Nodes table.
+#     node_views:
+#       capacity:
+#         columns: [name, status, label:topology.kubernetes.io/zone]
 inspector_format: yaml
 # inspector_position: right # right or bottom; I opens the placement chooser
 # inspector_visible: true # i toggles; omitted uses the selected layout's default
